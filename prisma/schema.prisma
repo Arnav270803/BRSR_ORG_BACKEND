@@ -1,0 +1,315 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum CompanyStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+}
+
+enum MembershipRole {
+  ADMIN
+  USER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  DISABLED
+}
+
+model User {
+  id        String  @id @default(uuid()) @db.Uuid
+  googleSub String  @unique @map("google_sub")
+  email     String  @unique
+  name      String?
+  avatarUrl String? @map("avatar_url")
+
+  isSuperAdmin Boolean   @default(false) @map("is_super_admin")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  memberships         CompanyMembership[]
+  refreshTokens       RefreshToken[]
+  sentInvitations     Invitation[]        @relation("InvitationInvitedBy")
+  acceptedInvitations Invitation[]        @relation("InvitationAcceptedBy")
+  selectedGhgActivitySelections CompanyGhgActivitySelection[] @relation("GhgSelectionSelectedBy")
+  createdDataRecords DataRecord[] @relation("DataRecordCreatedBy")
+  deletedDataRecords DataRecord[] @relation("DataRecordDeletedBy")
+  auditLogs           AuditLog[]          @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Company {
+  id        String @id @default(uuid()) @db.Uuid
+  legalName String @map("legal_name")
+  displayName String @map("display_name")
+  primaryDomain String @map("primary_domain")
+  industry String
+  country String
+  state String
+  city String
+  financialYearStartMonth Int @map("financial_year_start_month")
+
+  cin String?
+  gst String?
+  registeredAddress String? @map("registered_address")
+  listedStatus String? @map("listed_status")
+  employeeCountRange String? @map("employee_count_range")
+  contactPhone String? @map("contact_phone")
+  logoUrl String? @map("logo_url")
+
+  status CompanyStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  memberships CompanyMembership[]
+  invitations Invitation[]
+  reportingYears ReportingYear[]
+  ghgActivitySelections CompanyGhgActivitySelection[]
+  dataRecords DataRecord[]
+  auditLogs AuditLog[]
+
+  @@index([primaryDomain])
+  @@map("companies")
+}
+
+model GhgCategory {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  sourceSheet String  @unique @map("source_sheet")
+  scope       String?
+  description String? @db.Text
+  sortOrder   Int     @default(0) @map("sort_order")
+  isActive    Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  activities GhgActivity[]
+
+  @@index([scope])
+  @@index([isActive])
+  @@map("ghg_categories")
+}
+
+model GhgActivity {
+  id         String @id @default(uuid()) @db.Uuid
+  categoryId String @map("category_id") @db.Uuid
+
+  sourceSheet   String  @map("source_sheet")
+  sourceYear    Int?    @map("source_year")
+  sourceVersion String? @map("source_version")
+  sourceRow     Int     @map("source_row")
+
+  scope    String?
+  activity String
+  subtype  String  @default("")
+  variant  String  @default("")
+  unit     String
+
+  factorKgCo2e Decimal? @map("factor_kg_co2e") @db.Decimal(24, 10)
+  factorData    Json?    @map("factor_data")
+  rawData       Json?    @map("raw_data")
+
+  sortOrder Int     @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  category GhgCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  companySelections CompanyGhgActivitySelection[]
+  dataRecords DataRecord[]
+
+  @@unique([sourceSheet, sourceRow, unit, activity, subtype, variant])
+  @@index([categoryId])
+  @@index([scope])
+  @@index([activity])
+  @@index([unit])
+  @@index([isActive])
+  @@map("ghg_activities")
+}
+
+model ReportingYear {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @map("company_id") @db.Uuid
+
+  label     String
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  isActive  Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ghgActivitySelections CompanyGhgActivitySelection[]
+  dataRecords DataRecord[]
+
+  @@unique([companyId, label])
+  @@unique([companyId, startDate, endDate])
+  @@index([companyId])
+  @@index([isActive])
+  @@map("reporting_years")
+}
+
+model CompanyGhgActivitySelection {
+  id              String @id @default(uuid()) @db.Uuid
+  companyId       String @map("company_id") @db.Uuid
+  reportingYearId String @map("reporting_year_id") @db.Uuid
+  ghgActivityId   String @map("ghg_activity_id") @db.Uuid
+
+  customLabel String? @map("custom_label")
+  isEnabled   Boolean @default(true) @map("is_enabled")
+  selectedAt  DateTime @default(now()) @map("selected_at")
+  disabledAt  DateTime? @map("disabled_at")
+
+  selectedByUserId String? @map("selected_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reportingYear ReportingYear @relation(fields: [reportingYearId], references: [id], onDelete: Cascade)
+  ghgActivity   GhgActivity   @relation(fields: [ghgActivityId], references: [id], onDelete: Restrict)
+  selectedBy    User?         @relation("GhgSelectionSelectedBy", fields: [selectedByUserId], references: [id], onDelete: SetNull)
+  dataRecords   DataRecord[]
+
+  @@unique([reportingYearId, ghgActivityId])
+  @@index([companyId, reportingYearId])
+  @@index([ghgActivityId])
+  @@index([isEnabled])
+  @@map("company_ghg_activity_selections")
+}
+
+model DataRecord {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @map("company_id") @db.Uuid
+  reportingYearId String @map("reporting_year_id") @db.Uuid
+  ghgActivitySelectionId String @map("ghg_activity_selection_id") @db.Uuid
+  ghgActivityId String @map("ghg_activity_id") @db.Uuid
+
+  recordDate DateTime @map("record_date") @db.Date
+  quantity Decimal @db.Decimal(24, 10)
+  unit String
+  factorKgCo2e Decimal? @map("factor_kg_co2e") @db.Decimal(24, 10)
+  calculatedKgCo2e Decimal? @map("calculated_kg_co2e") @db.Decimal(24, 10)
+
+  notes String? @db.Text
+  metadata Json?
+
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+  deletedByUserId String? @map("deleted_by_user_id") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reportingYear ReportingYear @relation(fields: [reportingYearId], references: [id], onDelete: Cascade)
+  ghgActivitySelection CompanyGhgActivitySelection @relation(fields: [ghgActivitySelectionId], references: [id], onDelete: Restrict)
+  ghgActivity GhgActivity @relation(fields: [ghgActivityId], references: [id], onDelete: Restrict)
+  createdBy User @relation("DataRecordCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  deletedBy User? @relation("DataRecordDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, reportingYearId])
+  @@index([ghgActivitySelectionId])
+  @@index([ghgActivityId])
+  @@index([createdByUserId])
+  @@index([deletedAt])
+  @@index([recordDate])
+  @@map("data_records")
+}
+
+model CompanyMembership {
+  id        String           @id @default(uuid()) @db.Uuid
+  companyId String           @map("company_id") @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  role      MembershipRole
+  status    MembershipStatus @default(ACTIVE)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+  @@index([userId])
+  @@map("company_memberships")
+}
+
+model Invitation {
+  id        String         @id @default(uuid()) @db.Uuid
+  companyId String         @map("company_id") @db.Uuid
+  email     String
+  role      MembershipRole
+  tokenHash String         @unique @map("token_hash")
+
+  invitedByUserId String  @map("invited_by_user_id") @db.Uuid
+  acceptedByUserId String? @map("accepted_by_user_id") @db.Uuid
+
+  expiresAt  DateTime  @map("expires_at")
+  acceptedAt DateTime? @map("accepted_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedBy  User    @relation("InvitationInvitedBy", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  acceptedBy User?   @relation("InvitationAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, email])
+  @@index([expiresAt])
+  @@map("invitations")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  createdByIp String? @map("created_by_ip")
+  userAgent   String? @map("user_agent") @db.Text
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id          String  @id @default(uuid()) @db.Uuid
+  companyId   String? @map("company_id") @db.Uuid
+  actorUserId String? @map("actor_user_id") @db.Uuid
+
+  action     String
+  entityType String  @map("entity_type")
+  entityId   String? @map("entity_id")
+
+  beforeJson Json? @map("before_json")
+  afterJson  Json? @map("after_json")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent") @db.Text
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  actor   User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([actorUserId])
+  @@index([action])
+  @@map("audit_logs")
+}

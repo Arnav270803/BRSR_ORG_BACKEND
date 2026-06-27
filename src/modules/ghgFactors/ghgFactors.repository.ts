@@ -1,0 +1,1 @@
+// GHG factors repository placeholder.
