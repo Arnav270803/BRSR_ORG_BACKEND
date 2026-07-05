@@ -15,9 +15,16 @@ export type CompanyAccessContext = {
   membershipId?: string;
 };
 
+export type SiteAccessContext = {
+  siteId: string;
+  role: AppRole;
+  siteMembershipId?: string;
+};
+
 export type RequestContext = {
   user?: AuthenticatedUserContext;
   company?: CompanyAccessContext;
+  site?: SiteAccessContext;
 };
 
 export type ApiSuccess<TData> = {

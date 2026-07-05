@@ -48,6 +48,12 @@ function buildReportLines(report: ReportData) {
   add(`Primary domain: ${report.company.primaryDomain}`);
   add(`Financial year starts: month ${report.company.financialYearStartMonth}`);
   add("");
+  add("Site summary");
+  add(`Site: ${report.site.name}`);
+  add(`Type: ${report.site.type}`);
+  add(`Location: ${report.site.city}, ${report.site.state}, ${report.site.country}`);
+  add(`Primary site: ${report.site.isPrimary ? "Yes" : "No"}`);
+  add("");
   add("Reporting year summary");
   add(`Selected year: ${report.reportingYear.label}`);
   add(`Start date: ${report.reportingYear.startDate}`);

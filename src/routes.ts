@@ -12,6 +12,7 @@ import {
 } from "./modules/invitations/invitations.routes.js";
 import { reportingYearsRouter } from "./modules/reportingYears/reportingYears.routes.js";
 import { reportsPdfRouter, reportsRouter } from "./modules/reports/reports.routes.js";
+import { sitesRouter } from "./modules/sites/sites.routes.js";
 
 export const apiRouter = Router();
 
@@ -22,7 +23,15 @@ apiRouter.use(
   dataRecordsRouter
 );
 apiRouter.use(
+  "/companies/:companyId/sites/:siteId/reporting-years/:reportingYearId/data-records",
+  dataRecordsRouter
+);
+apiRouter.use(
   "/companies/:companyId/reporting-years/:reportingYearId/ghg-activity-selections",
+  fieldConfigRouter
+);
+apiRouter.use(
+  "/companies/:companyId/sites/:siteId/reporting-years/:reportingYearId/ghg-activity-selections",
   fieldConfigRouter
 );
 apiRouter.use(
@@ -30,10 +39,19 @@ apiRouter.use(
   reportsPdfRouter
 );
 apiRouter.use(
+  "/companies/:companyId/sites/:siteId/reporting-years/:reportingYearId/report.pdf",
+  reportsPdfRouter
+);
+apiRouter.use(
   "/companies/:companyId/reporting-years/:reportingYearId/report",
   reportsRouter
 );
+apiRouter.use(
+  "/companies/:companyId/sites/:siteId/reporting-years/:reportingYearId/report",
+  reportsRouter
+);
 apiRouter.use("/companies/:companyId/reporting-years", reportingYearsRouter);
+apiRouter.use("/companies/:companyId/sites", sitesRouter);
 apiRouter.use("/companies", companiesRouter);
 apiRouter.use("/ghg", ghgFactorsRouter);
 apiRouter.use("/health", healthRouter);

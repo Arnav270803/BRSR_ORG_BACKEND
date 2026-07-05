@@ -1,3 +1,4 @@
+import { CompanySiteType } from "@prisma/client";
 import { z } from "zod";
 
 const optionalText = z
@@ -26,7 +27,17 @@ export const createCompanySchema = z.object({
   listedStatus: optionalText,
   employeeCountRange: optionalText,
   contactPhone: optionalText,
-  logoUrl: z.string().trim().url().optional()
+  logoUrl: z.string().trim().url().optional(),
+  site: z
+    .object({
+      name: z.string().trim().min(1, "Site name is required"),
+      type: z.nativeEnum(CompanySiteType).default(CompanySiteType.OTHER),
+      country: z.string().trim().min(1, "Site country is required"),
+      state: z.string().trim().min(1, "Site state is required"),
+      city: z.string().trim().min(1, "Site city is required"),
+      address: optionalText
+    })
+    .optional()
 });
 
 export type CreateCompanyInput = z.infer<typeof createCompanySchema>;

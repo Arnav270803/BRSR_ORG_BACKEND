@@ -24,6 +24,20 @@ enum MembershipStatus {
   DISABLED
 }
 
+enum CompanySiteType {
+  OFFICE
+  PLANT
+  WAREHOUSE
+  BRANCH
+  FACTORY
+  OTHER
+}
+
+enum CompanySiteStatus {
+  ACTIVE
+  DISABLED
+}
+
 model User {
   id        String  @id @default(uuid()) @db.Uuid
   googleSub String  @unique @map("google_sub")
@@ -37,6 +51,7 @@ model User {
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   memberships         CompanyMembership[]
+  siteMemberships     CompanySiteMembership[]
   refreshTokens       RefreshToken[]
   sentInvitations     Invitation[]        @relation("InvitationInvitedBy")
   acceptedInvitations Invitation[]        @relation("InvitationAcceptedBy")
@@ -72,6 +87,8 @@ model Company {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   memberships CompanyMembership[]
+  sites CompanySite[]
+  siteMemberships CompanySiteMembership[]
   invitations Invitation[]
   reportingYears ReportingYear[]
   ghgActivitySelections CompanyGhgActivitySelection[]
@@ -162,9 +179,62 @@ model ReportingYear {
   @@map("reporting_years")
 }
 
+model CompanySite {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @map("company_id") @db.Uuid
+
+  name String
+  type CompanySiteType @default(OTHER)
+  country String
+  state String
+  city String
+  address String? @db.Text
+  isPrimary Boolean @default(false) @map("is_primary")
+  status CompanySiteStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  memberships CompanySiteMembership[]
+  ghgActivitySelections CompanyGhgActivitySelection[]
+  dataRecords DataRecord[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([companyId, isPrimary])
+  @@index([status])
+  @@map("company_sites")
+}
+
+model CompanySiteMembership {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @map("company_id") @db.Uuid
+  siteId    String @map("site_id") @db.Uuid
+  userId    String @map("user_id") @db.Uuid
+
+  role MembershipRole @default(USER)
+  status MembershipStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site CompanySite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, userId])
+  @@index([companyId, userId])
+  @@index([siteId])
+  @@index([userId])
+  @@index([status])
+  @@map("company_site_memberships")
+}
+
 model CompanyGhgActivitySelection {
   id              String @id @default(uuid()) @db.Uuid
   companyId       String @map("company_id") @db.Uuid
+  siteId          String @map("site_id") @db.Uuid
   reportingYearId String @map("reporting_year_id") @db.Uuid
   ghgActivityId   String @map("ghg_activity_id") @db.Uuid
 
@@ -179,13 +249,16 @@ model CompanyGhgActivitySelection {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site          CompanySite   @relation(fields: [siteId], references: [id], onDelete: Cascade)
   reportingYear ReportingYear @relation(fields: [reportingYearId], references: [id], onDelete: Cascade)
   ghgActivity   GhgActivity   @relation(fields: [ghgActivityId], references: [id], onDelete: Restrict)
   selectedBy    User?         @relation("GhgSelectionSelectedBy", fields: [selectedByUserId], references: [id], onDelete: SetNull)
   dataRecords   DataRecord[]
 
-  @@unique([reportingYearId, ghgActivityId])
+  @@unique([reportingYearId, siteId, ghgActivityId])
   @@index([companyId, reportingYearId])
+  @@index([companyId, siteId, reportingYearId])
+  @@index([siteId])
   @@index([ghgActivityId])
   @@index([isEnabled])
   @@map("company_ghg_activity_selections")
@@ -194,6 +267,7 @@ model CompanyGhgActivitySelection {
 model DataRecord {
   id        String @id @default(uuid()) @db.Uuid
   companyId String @map("company_id") @db.Uuid
+  siteId String @map("site_id") @db.Uuid
   reportingYearId String @map("reporting_year_id") @db.Uuid
   ghgActivitySelectionId String @map("ghg_activity_selection_id") @db.Uuid
   ghgActivityId String @map("ghg_activity_id") @db.Uuid
@@ -215,6 +289,7 @@ model DataRecord {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site CompanySite @relation(fields: [siteId], references: [id], onDelete: Cascade)
   reportingYear ReportingYear @relation(fields: [reportingYearId], references: [id], onDelete: Cascade)
   ghgActivitySelection CompanyGhgActivitySelection @relation(fields: [ghgActivitySelectionId], references: [id], onDelete: Restrict)
   ghgActivity GhgActivity @relation(fields: [ghgActivityId], references: [id], onDelete: Restrict)
@@ -222,6 +297,8 @@ model DataRecord {
   deletedBy User? @relation("DataRecordDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
 
   @@index([companyId, reportingYearId])
+  @@index([companyId, siteId, reportingYearId])
+  @@index([siteId])
   @@index([ghgActivitySelectionId])
   @@index([ghgActivityId])
   @@index([createdByUserId])

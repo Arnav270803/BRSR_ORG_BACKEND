@@ -3,7 +3,11 @@ import type { Request, RequestHandler, Response } from "express";
 import { verifyAccessToken } from "../infra/auth/jwt.js";
 import { ACCESS_TOKEN_COOKIE_NAME } from "../shared/constants.js";
 import { AppError } from "../shared/errors/AppError.js";
-import type { AuthenticatedUserContext, CompanyAccessContext } from "../shared/types.js";
+import type {
+  AuthenticatedUserContext,
+  CompanyAccessContext,
+  SiteAccessContext
+} from "../shared/types.js";
 
 function getSignedCookie(req: Request, name: string): string | null {
   const signedCookies = req.signedCookies as Record<string, string | undefined> | undefined;
@@ -66,4 +70,14 @@ export function getCompanyAccess(res: Response): CompanyAccessContext {
   }
 
   return company;
+}
+
+export function getSiteAccess(res: Response): SiteAccessContext {
+  const site = res.locals.site as SiteAccessContext | undefined;
+
+  if (!site) {
+    throw new AppError("Site access context required", 500, "SITE_CONTEXT_REQUIRED");
+  }
+
+  return site;
 }

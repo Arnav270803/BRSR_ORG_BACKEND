@@ -209,6 +209,36 @@ export async function acceptInvitation(token: string, user: AuthenticatedUserCon
             role: invitation.role
           }
         });
+    const primarySite = await tx.companySite.findFirst({
+      where: {
+        companyId: invitation.companyId,
+        isPrimary: true
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (primarySite) {
+      await tx.companySiteMembership.upsert({
+        where: {
+          siteId_userId: {
+            siteId: primarySite.id,
+            userId: user.id
+          }
+        },
+        update: {
+          role: invitation.role,
+          status: MembershipStatus.ACTIVE
+        },
+        create: {
+          companyId: invitation.companyId,
+          siteId: primarySite.id,
+          userId: user.id,
+          role: invitation.role
+        }
+      });
+    }
 
     const acceptedInvitation = await tx.invitation.update({
       where: { id: invitation.id },
@@ -227,6 +257,7 @@ export async function acceptInvitation(token: string, user: AuthenticatedUserCon
         entityId: invitation.id,
         afterJson: {
           membershipId: membership.id,
+          primarySiteId: primarySite?.id ?? null,
           role: membership.role
         }
       }

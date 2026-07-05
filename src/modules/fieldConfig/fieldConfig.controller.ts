@@ -8,11 +8,18 @@ import {
 } from "./fieldConfig.service.js";
 
 export async function listGhgActivitySelectionsController(
-  req: Request<{ reportingYearId: string }>,
+  req: Request<{ siteId?: string; reportingYearId: string }>,
   res: Response
 ) {
+  const user = getAuthenticatedUser(res);
   const company = getCompanyAccess(res);
-  const result = await listCompanyGhgActivitySelections(company.companyId, req.params.reportingYearId);
+  const result = await listCompanyGhgActivitySelections(
+    company.companyId,
+    req.params.siteId,
+    req.params.reportingYearId,
+    user,
+    company
+  );
 
   res.status(200).json({
     data: result
@@ -20,7 +27,7 @@ export async function listGhgActivitySelectionsController(
 }
 
 export async function updateGhgActivitySelectionsController(
-  req: Request<{ reportingYearId: string }>,
+  req: Request<{ siteId?: string; reportingYearId: string }>,
   res: Response
 ) {
   const user = getAuthenticatedUser(res);
@@ -28,9 +35,12 @@ export async function updateGhgActivitySelectionsController(
   const input = updateGhgActivitySelectionsSchema.parse(req.body);
   const result = await replaceCompanyGhgActivitySelections(
     company.companyId,
+    req.params.siteId,
     req.params.reportingYearId,
     input,
-    user.id
+    user.id,
+    user,
+    company
   );
 
   res.status(200).json({

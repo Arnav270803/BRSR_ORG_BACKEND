@@ -1,4 +1,9 @@
-import { MembershipRole, MembershipStatus } from "@prisma/client";
+import {
+  CompanySiteStatus,
+  CompanySiteType,
+  MembershipRole,
+  MembershipStatus
+} from "@prisma/client";
 
 import { prisma } from "../../infra/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
@@ -83,6 +88,35 @@ export async function createCompanyForUser(input: CreateCompanyInput, userId: st
         role: MembershipRole.ADMIN
       }
     });
+    const primarySiteInput = input.site ?? {
+      name: `${input.city} Site`,
+      type: CompanySiteType.OTHER,
+      country: input.country,
+      state: input.state,
+      city: input.city,
+      address: input.registeredAddress
+    };
+    const site = await tx.companySite.create({
+      data: {
+        companyId: company.id,
+        name: primarySiteInput.name,
+        type: primarySiteInput.type,
+        country: primarySiteInput.country,
+        state: primarySiteInput.state,
+        city: primarySiteInput.city,
+        address: primarySiteInput.address ?? null,
+        isPrimary: true
+      }
+    });
+
+    await tx.companySiteMembership.create({
+      data: {
+        companyId: company.id,
+        siteId: site.id,
+        userId,
+        role: MembershipRole.ADMIN
+      }
+    });
 
     await tx.auditLog.create({
       data: {
@@ -94,6 +128,7 @@ export async function createCompanyForUser(input: CreateCompanyInput, userId: st
         afterJson: {
           companyId: company.id,
           membershipId: membership.id,
+          primarySiteId: site.id,
           role: membership.role
         }
       }
@@ -178,11 +213,42 @@ export async function getCompanyWorkspace(companyId: string, userId: string, isS
   if (!isSuperAdmin && !membership) {
     throw new AppError("Company access denied", 403, "COMPANY_ACCESS_DENIED");
   }
+  const sites = await prisma.companySite.findMany({
+    where:
+      isSuperAdmin || membership?.role === MembershipRole.ADMIN
+        ? {
+            companyId,
+            status: CompanySiteStatus.ACTIVE
+          }
+        : {
+            companyId,
+            status: CompanySiteStatus.ACTIVE,
+            memberships: {
+              some: {
+                userId,
+                status: MembershipStatus.ACTIVE
+              }
+            }
+          },
+    orderBy: [{ isPrimary: "desc" }, { name: "asc" }]
+  });
 
   return {
     company: toCompanySummary(company),
     viewerRole: isSuperAdmin ? "SUPER_ADMIN" : membership?.role,
     activeMemberCount: company.memberships.length,
+    sites: sites.map((site) => ({
+      id: site.id,
+      companyId: site.companyId,
+      name: site.name,
+      type: site.type,
+      country: site.country,
+      state: site.state,
+      city: site.city,
+      address: site.address,
+      isPrimary: site.isPrimary,
+      status: site.status
+    })),
     reportingYears: company.reportingYears.map((reportingYear) => ({
       id: reportingYear.id,
       label: reportingYear.label,
@@ -192,6 +258,7 @@ export async function getCompanyWorkspace(companyId: string, userId: string, isS
     })),
     setup: {
       reportingYearsReady: company.reportingYears.length > 0,
+      sitesReady: sites.length > 0,
       ghgActivitySelectionReady: company.reportingYears.some(
         (reportingYear) => reportingYear._count.ghgActivitySelections > 0
       ),

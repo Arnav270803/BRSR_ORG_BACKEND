@@ -6,6 +6,7 @@ import { AppError } from "../../shared/errors/AppError.js";
 import type { AuthenticatedUserContext, CompanyAccessContext } from "../../shared/types.js";
 import { now, toIsoDate } from "../../shared/utils/date.js";
 import { getPagination, getPaginationMeta } from "../../shared/utils/pagination.js";
+import { resolveCompanySiteForAccess } from "../sites/sites.service.js";
 import type { CreateDataRecordInput, ListDataRecordsQuery } from "./dataRecords.schemas.js";
 
 function toDateOnly(value: string): Date {
@@ -23,6 +24,7 @@ function calculateEmissions(quantity: Prisma.Decimal, factor: Prisma.Decimal | n
 function toDataRecordResponse(record: {
   id: string;
   companyId: string;
+  siteId: string;
   reportingYearId: string;
   ghgActivitySelectionId: string;
   ghgActivityId: string;
@@ -59,6 +61,7 @@ function toDataRecordResponse(record: {
   return {
     id: record.id,
     companyId: record.companyId,
+    siteId: record.siteId,
     reportingYearId: record.reportingYearId,
     ghgActivitySelectionId: record.ghgActivitySelectionId,
     ghgActivityId: record.ghgActivityId,
@@ -110,16 +113,20 @@ async function getActiveReportingYear(companyId: string, reportingYearId: string
 
 export async function createDataRecord(
   companyId: string,
+  siteId: string | undefined,
   reportingYearId: string,
   input: CreateDataRecordInput,
-  user: AuthenticatedUserContext
+  user: AuthenticatedUserContext,
+  companyAccess: CompanyAccessContext
 ) {
   await getActiveReportingYear(companyId, reportingYearId);
+  const site = await resolveCompanySiteForAccess(companyId, siteId, user, companyAccess);
 
   const selection = await prisma.companyGhgActivitySelection.findFirst({
     where: {
       id: input.ghgActivitySelectionId,
       companyId,
+      siteId: site.id,
       reportingYearId,
       isEnabled: true
     },
@@ -144,6 +151,7 @@ export async function createDataRecord(
     const dataRecord = await tx.dataRecord.create({
       data: {
         companyId,
+        siteId: site.id,
         reportingYearId,
         ghgActivitySelectionId: selection.id,
         ghgActivityId: selection.ghgActivityId,
@@ -187,6 +195,7 @@ export async function createDataRecord(
         afterJson: {
           dataRecordId: dataRecord.id,
           reportingYearId,
+          siteId: site.id,
           ghgActivitySelectionId: selection.id,
           ghgActivityId: selection.ghgActivityId,
           quantity: quantity.toString(),
@@ -205,10 +214,14 @@ export async function createDataRecord(
 
 export async function listDataRecords(
   companyId: string,
+  siteId: string | undefined,
   reportingYearId: string,
-  input: ListDataRecordsQuery
+  input: ListDataRecordsQuery,
+  user: AuthenticatedUserContext,
+  companyAccess: CompanyAccessContext
 ) {
   await getActiveReportingYear(companyId, reportingYearId);
+  const site = await resolveCompanySiteForAccess(companyId, siteId, user, companyAccess);
 
   const pagination = getPagination({
     page: input.page ?? null,
@@ -216,6 +229,7 @@ export async function listDataRecords(
   });
   const where: Prisma.DataRecordWhereInput = {
     companyId,
+    siteId: site.id,
     reportingYearId,
     deletedAt: null
   };
@@ -261,17 +275,20 @@ export async function listDataRecords(
 
 export async function softDeleteDataRecord(
   companyId: string,
+  siteId: string | undefined,
   reportingYearId: string,
   dataRecordId: string,
   user: AuthenticatedUserContext,
   companyAccess: CompanyAccessContext
 ) {
   await getActiveReportingYear(companyId, reportingYearId);
+  const site = await resolveCompanySiteForAccess(companyId, siteId, user, companyAccess);
 
   const dataRecord = await prisma.dataRecord.findFirst({
     where: {
       id: dataRecordId,
       companyId,
+      siteId: site.id,
       reportingYearId,
       deletedAt: null
     }

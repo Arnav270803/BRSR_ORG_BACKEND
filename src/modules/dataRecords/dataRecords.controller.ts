@@ -15,6 +15,7 @@ import {
 } from "./dataRecords.service.js";
 
 type DataRecordRouteParams = {
+  siteId?: string;
   reportingYearId: string;
   dataRecordId?: string;
 };
@@ -26,7 +27,14 @@ export async function createDataRecordController(
   const user = getAuthenticatedUser(res);
   const company = getCompanyAccess(res);
   const input = createDataRecordSchema.parse(req.body);
-  const dataRecord = await createDataRecord(company.companyId, req.params.reportingYearId, input, user);
+  const dataRecord = await createDataRecord(
+    company.companyId,
+    req.params.siteId,
+    req.params.reportingYearId,
+    input,
+    user,
+    company
+  );
 
   res.status(201).json({
     data: dataRecord
@@ -38,8 +46,16 @@ export async function listDataRecordsController(
   res: Response
 ) {
   const company = getCompanyAccess(res);
+  const user = getAuthenticatedUser(res);
   const input = listDataRecordsQuerySchema.parse(req.query);
-  const result = await listDataRecords(company.companyId, req.params.reportingYearId, input);
+  const result = await listDataRecords(
+    company.companyId,
+    req.params.siteId,
+    req.params.reportingYearId,
+    input,
+    user,
+    company
+  );
 
   res.status(200).json(result);
 }
@@ -64,6 +80,7 @@ export async function deleteDataRecordController(
 
   const dataRecord = await softDeleteDataRecord(
     company.companyId,
+    req.params.siteId,
     req.params.reportingYearId,
     dataRecordId,
     user,

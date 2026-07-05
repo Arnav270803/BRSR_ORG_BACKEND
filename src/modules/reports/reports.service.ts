@@ -2,7 +2,9 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../infra/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
+import type { AuthenticatedUserContext, CompanyAccessContext } from "../../shared/types.js";
 import { toIsoDate } from "../../shared/utils/date.js";
+import { resolveCompanySiteForAccess } from "../sites/sites.service.js";
 
 type ReportRecord = {
   id: string;
@@ -87,8 +89,12 @@ function mapTotals(map: Map<string, { recordCount: number; totalKgCo2e: number }
 
 export async function generateCompanyReportingYearReport(
   companyId: string,
-  reportingYearId: string
+  siteId: string | undefined,
+  reportingYearId: string,
+  user: AuthenticatedUserContext,
+  companyAccess: CompanyAccessContext
 ) {
+  const site = await resolveCompanySiteForAccess(companyId, siteId, user, companyAccess);
   const reportingYear = await prisma.reportingYear.findFirst({
     where: {
       id: reportingYearId,
@@ -99,6 +105,7 @@ export async function generateCompanyReportingYearReport(
       company: true,
       ghgActivitySelections: {
         where: {
+          siteId: site.id,
           isEnabled: true
         },
         orderBy: [
@@ -123,6 +130,7 @@ export async function generateCompanyReportingYearReport(
       },
       dataRecords: {
         where: {
+          siteId: site.id,
           deletedAt: null
         },
         orderBy: [{ recordDate: "asc" }, { createdAt: "asc" }],
@@ -201,6 +209,16 @@ export async function generateCompanyReportingYearReport(
       industry: reportingYear.company.industry,
       location: `${reportingYear.company.city}, ${reportingYear.company.state}, ${reportingYear.company.country}`,
       financialYearStartMonth: reportingYear.company.financialYearStartMonth
+    },
+    site: {
+      id: site.id,
+      name: site.name,
+      type: site.type,
+      country: site.country,
+      state: site.state,
+      city: site.city,
+      address: site.address,
+      isPrimary: site.isPrimary
     },
     reportingYear: {
       id: reportingYear.id,

@@ -2,7 +2,9 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../infra/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
+import type { AuthenticatedUserContext, CompanyAccessContext } from "../../shared/types.js";
 import { now, toIsoDate } from "../../shared/utils/date.js";
+import { resolveCompanySiteForAccess } from "../sites/sites.service.js";
 import type { UpdateGhgActivitySelectionsInput } from "./fieldConfig.schemas.js";
 
 function toReportingYearSummary(reportingYear: {
@@ -23,6 +25,7 @@ function toReportingYearSummary(reportingYear: {
 
 function toSelectedActivityResponse(selection: {
   id: string;
+  siteId: string;
   customLabel: string | null;
   selectedAt: Date;
   ghgActivity: {
@@ -50,6 +53,7 @@ function toSelectedActivityResponse(selection: {
 
   return {
     selectionId: selection.id,
+    siteId: selection.siteId,
     customLabel: selection.customLabel,
     selectedAt: selection.selectedAt.toISOString(),
     activity: {
@@ -87,11 +91,19 @@ async function getReportingYear(companyId: string, reportingYearId: string) {
   return reportingYear;
 }
 
-export async function listCompanyGhgActivitySelections(companyId: string, reportingYearId: string) {
+export async function listCompanyGhgActivitySelections(
+  companyId: string,
+  siteId: string | undefined,
+  reportingYearId: string,
+  user: AuthenticatedUserContext,
+  companyAccess: CompanyAccessContext
+) {
   const reportingYear = await getReportingYear(companyId, reportingYearId);
+  const site = await resolveCompanySiteForAccess(companyId, siteId, user, companyAccess);
   const selections = await prisma.companyGhgActivitySelection.findMany({
     where: {
       companyId,
+      siteId: site.id,
       reportingYearId,
       isEnabled: true
     },
@@ -123,6 +135,15 @@ export async function listCompanyGhgActivitySelections(companyId: string, report
   });
 
   return {
+    site: {
+      id: site.id,
+      name: site.name,
+      type: site.type,
+      city: site.city,
+      state: site.state,
+      country: site.country,
+      isPrimary: site.isPrimary
+    },
     reportingYear: toReportingYearSummary(reportingYear),
     selectedActivities: selections.map(toSelectedActivityResponse)
   };
@@ -130,11 +151,15 @@ export async function listCompanyGhgActivitySelections(companyId: string, report
 
 export async function replaceCompanyGhgActivitySelections(
   companyId: string,
+  siteId: string | undefined,
   reportingYearId: string,
   input: UpdateGhgActivitySelectionsInput,
-  actorUserId: string
+  actorUserId: string,
+  user: AuthenticatedUserContext,
+  companyAccess: CompanyAccessContext
 ) {
   await getReportingYear(companyId, reportingYearId);
+  const site = await resolveCompanySiteForAccess(companyId, siteId, user, companyAccess);
 
   const activityIds = [...new Set(input.activityIds)];
   const activities = await prisma.ghgActivity.findMany({
@@ -159,6 +184,7 @@ export async function replaceCompanyGhgActivitySelections(
   const existingSelections = await prisma.companyGhgActivitySelection.findMany({
     where: {
       companyId,
+      siteId: site.id,
       reportingYearId,
       isEnabled: true
     },
@@ -174,6 +200,7 @@ export async function replaceCompanyGhgActivitySelections(
       await tx.companyGhgActivitySelection.updateMany({
         where: {
           companyId,
+          siteId: site.id,
           reportingYearId,
           isEnabled: true
         },
@@ -186,6 +213,7 @@ export async function replaceCompanyGhgActivitySelections(
       await tx.companyGhgActivitySelection.updateMany({
         where: {
           companyId,
+          siteId: site.id,
           reportingYearId,
           isEnabled: true,
           ghgActivityId: {
@@ -202,13 +230,15 @@ export async function replaceCompanyGhgActivitySelections(
     for (const activityId of activityIds) {
       await tx.companyGhgActivitySelection.upsert({
         where: {
-          reportingYearId_ghgActivityId: {
+          reportingYearId_siteId_ghgActivityId: {
             reportingYearId,
+            siteId: site.id,
             ghgActivityId: activityId
           }
         },
         update: {
           companyId,
+          siteId: site.id,
           isEnabled: true,
           disabledAt: null,
           selectedAt: currentTime,
@@ -216,6 +246,7 @@ export async function replaceCompanyGhgActivitySelections(
         },
         create: {
           companyId,
+          siteId: site.id,
           reportingYearId,
           ghgActivityId: activityId,
           selectedAt: currentTime,
@@ -233,15 +264,17 @@ export async function replaceCompanyGhgActivitySelections(
         entityId: reportingYearId,
         beforeJson: {
           activityIds: beforeActivityIds,
+          siteId: site.id,
           count: beforeActivityIds.length
         },
         afterJson: {
           activityIds,
+          siteId: site.id,
           count: activityIds.length
         }
       }
     });
   });
 
-  return listCompanyGhgActivitySelections(companyId, reportingYearId);
+  return listCompanyGhgActivitySelections(companyId, site.id, reportingYearId, user, companyAccess);
 }
