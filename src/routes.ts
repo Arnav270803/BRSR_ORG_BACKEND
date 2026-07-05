@@ -11,6 +11,7 @@ import {
   invitationsRouter
 } from "./modules/invitations/invitations.routes.js";
 import { reportingYearsRouter } from "./modules/reportingYears/reportingYears.routes.js";
+import { reportsPdfRouter, reportsRouter } from "./modules/reports/reports.routes.js";
 
 export const apiRouter = Router();
 
@@ -23,6 +24,14 @@ apiRouter.use(
 apiRouter.use(
   "/companies/:companyId/reporting-years/:reportingYearId/ghg-activity-selections",
   fieldConfigRouter
+);
+apiRouter.use(
+  "/companies/:companyId/reporting-years/:reportingYearId/report.pdf",
+  reportsPdfRouter
+);
+apiRouter.use(
+  "/companies/:companyId/reporting-years/:reportingYearId/report",
+  reportsRouter
 );
 apiRouter.use("/companies/:companyId/reporting-years", reportingYearsRouter);
 apiRouter.use("/companies", companiesRouter);
