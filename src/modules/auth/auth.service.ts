@@ -1,7 +1,8 @@
-import { MembershipStatus, Prisma } from "@prisma/client";
+import { AuthProvider, MembershipStatus, Prisma } from "@prisma/client";
 
 import { env } from "../../config/env.js";
 import { verifyGoogleIdToken } from "../../infra/auth/google.js";
+import { verifyLinkedInAuthorizationCode } from "../../infra/auth/linkedin.js";
 import { signAccessToken, verifyAccessToken } from "../../infra/auth/jwt.js";
 import { prisma } from "../../infra/prisma/client.js";
 import { ACCESS_TOKEN_TTL_MINUTES, REFRESH_TOKEN_TTL_DAYS } from "../../shared/constants.js";
@@ -51,6 +52,15 @@ type SessionContext = {
 type AuthSession = {
   context: SessionContext;
   tokens: SessionTokens;
+};
+
+type ExternalIdentity = {
+  provider: AuthProvider;
+  providerUserId: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  googleSub?: string | null;
 };
 
 function isSuperAdminEmail(email: string): boolean {
@@ -134,31 +144,130 @@ async function createSessionForUser(userId: string, metadata: RequestMetadata): 
 
 export async function loginWithGoogle(idToken: string, metadata: RequestMetadata): Promise<AuthSession> {
   const googleUser = await verifyGoogleIdToken(idToken);
-  const loginTime = now();
-  const isSuperAdmin = isSuperAdminEmail(googleUser.email);
 
-  const user = await prisma.user.upsert({
-    where: {
-      googleSub: googleUser.googleSub
-    },
-    update: {
-      email: googleUser.email,
-      name: googleUser.name,
-      avatarUrl: googleUser.avatarUrl,
-      isSuperAdmin,
-      lastLoginAt: loginTime
-    },
-    create: {
-      googleSub: googleUser.googleSub,
-      email: googleUser.email,
-      name: googleUser.name,
-      avatarUrl: googleUser.avatarUrl,
-      isSuperAdmin,
-      lastLoginAt: loginTime
-    }
+  const user = await findOrCreateUserFromIdentity({
+    provider: AuthProvider.GOOGLE,
+    providerUserId: googleUser.googleSub,
+    email: googleUser.email,
+    name: googleUser.name,
+    avatarUrl: googleUser.avatarUrl,
+    googleSub: googleUser.googleSub
   });
 
   return createSessionForUser(user.id, metadata);
+}
+
+export async function loginWithLinkedInAuthorizationCode({
+  code,
+  metadata,
+  nonce
+}: {
+  code: string;
+  metadata: RequestMetadata;
+  nonce: string;
+}): Promise<AuthSession> {
+  const linkedInUser = await verifyLinkedInAuthorizationCode({ code, nonce });
+
+  const user = await findOrCreateUserFromIdentity({
+    provider: AuthProvider.LINKEDIN,
+    providerUserId: linkedInUser.linkedInSub,
+    email: linkedInUser.email,
+    name: linkedInUser.name,
+    avatarUrl: linkedInUser.avatarUrl
+  });
+
+  return createSessionForUser(user.id, metadata);
+}
+
+async function findOrCreateUserFromIdentity(identity: ExternalIdentity) {
+  const loginTime = now();
+  const isSuperAdmin = isSuperAdminEmail(identity.email);
+
+  return prisma.$transaction(async (tx) => {
+    const existingIdentity = await tx.userIdentity.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: identity.provider,
+          providerUserId: identity.providerUserId
+        }
+      },
+      include: {
+        user: true
+      }
+    });
+
+    if (existingIdentity) {
+      return tx.user.update({
+        where: {
+          id: existingIdentity.userId
+        },
+        data: {
+          email: identity.email,
+          name: identity.name,
+          avatarUrl: identity.avatarUrl,
+          googleSub: identity.googleSub ?? existingIdentity.user.googleSub,
+          isSuperAdmin,
+          lastLoginAt: loginTime
+        }
+      });
+    }
+
+    const existingUser =
+      identity.googleSub
+        ? await tx.user.findFirst({
+            where: {
+              OR: [{ email: identity.email }, { googleSub: identity.googleSub }]
+            }
+          })
+        : await tx.user.findUnique({
+            where: {
+              email: identity.email
+            }
+          });
+
+    if (existingUser) {
+      await tx.userIdentity.create({
+        data: {
+          userId: existingUser.id,
+          provider: identity.provider,
+          providerUserId: identity.providerUserId,
+          email: identity.email
+        }
+      });
+
+      return tx.user.update({
+        where: {
+          id: existingUser.id
+        },
+        data: {
+          email: identity.email,
+          name: identity.name,
+          avatarUrl: identity.avatarUrl,
+          googleSub: identity.googleSub ?? existingUser.googleSub,
+          isSuperAdmin,
+          lastLoginAt: loginTime
+        }
+      });
+    }
+
+    return tx.user.create({
+      data: {
+        googleSub: identity.googleSub ?? null,
+        email: identity.email,
+        name: identity.name,
+        avatarUrl: identity.avatarUrl,
+        isSuperAdmin,
+        lastLoginAt: loginTime,
+        identities: {
+          create: {
+            provider: identity.provider,
+            providerUserId: identity.providerUserId,
+            email: identity.email
+          }
+        }
+      }
+    });
+  });
 }
 
 export async function getCurrentSession(accessToken: string): Promise<SessionContext> {

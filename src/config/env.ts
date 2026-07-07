@@ -16,6 +16,12 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   CLIENT_URL: z.string().url("CLIENT_URL must be a valid URL"),
   GOOGLE_CLIENT_ID: z.string().min(1, "GOOGLE_CLIENT_ID is required"),
+  LINKEDIN_CLIENT_ID: optionalNonEmptyString,
+  LINKEDIN_CLIENT_SECRET: optionalNonEmptyString,
+  LINKEDIN_REDIRECT_URI: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().url("LINKEDIN_REDIRECT_URI must be a valid URL").optional()
+  ),
   JWT_ACCESS_SECRET: z.string().min(32, "JWT_ACCESS_SECRET must be at least 32 characters"),
   JWT_REFRESH_SECRET: z.string().min(32, "JWT_REFRESH_SECRET must be at least 32 characters"),
   COOKIE_SECRET: z.string().min(32, "COOKIE_SECRET must be at least 32 characters"),
