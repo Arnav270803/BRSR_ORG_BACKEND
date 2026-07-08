@@ -1,7 +1,7 @@
 import { app } from "./app.js";
 import { env } from "./config/env.js";
 
-const server = app.listen(env.API_PORT, () => {
+const server = app.listen(env.API_PORT, "0.0.0.0", () => {
   console.log(`BRSR backend listening on port ${env.API_PORT}`);
 });
 
