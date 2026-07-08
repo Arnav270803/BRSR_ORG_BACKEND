@@ -168,15 +168,24 @@ export async function loginWithLinkedInAuthorizationCode({
 }): Promise<AuthSession> {
   const linkedInUser = await verifyLinkedInAuthorizationCode({ code, nonce });
 
-  const user = await findOrCreateUserFromIdentity({
-    provider: AuthProvider.LINKEDIN,
-    providerUserId: linkedInUser.linkedInSub,
-    email: linkedInUser.email,
-    name: linkedInUser.name,
-    avatarUrl: linkedInUser.avatarUrl
-  });
+  try {
+    const user = await findOrCreateUserFromIdentity({
+      provider: AuthProvider.LINKEDIN,
+      providerUserId: linkedInUser.linkedInSub,
+      email: linkedInUser.email,
+      name: linkedInUser.name,
+      avatarUrl: linkedInUser.avatarUrl
+    });
 
-  return createSessionForUser(user.id, metadata);
+    return createSessionForUser(user.id, metadata);
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    console.error("LinkedIn session creation failed", error);
+    throw new AppError("LinkedIn session creation failed", 500, "LINKEDIN_SESSION_CREATE_FAILED");
+  }
 }
 
 async function findOrCreateUserFromIdentity(identity: ExternalIdentity) {

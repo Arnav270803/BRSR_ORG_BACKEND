@@ -81,52 +81,98 @@ export async function verifyLinkedInAuthorizationCode({
   nonce: string;
 }): Promise<VerifiedLinkedInUser> {
   const config = getLinkedInConfig();
-  const tokenResponse = await fetch(LINKEDIN_TOKEN_URL, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      redirect_uri: config.redirectUri
-    })
-  });
+  let tokenResponse: Response;
+
+  try {
+    tokenResponse = await fetch(LINKEDIN_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        redirect_uri: config.redirectUri
+      })
+    });
+  } catch (error) {
+    console.error("LinkedIn token request failed", error);
+    throw new AppError("LinkedIn token request failed", 401, "LINKEDIN_TOKEN_REQUEST_FAILED");
+  }
 
   if (!tokenResponse.ok) {
+    const errorBody = await tokenResponse.text().catch(() => "");
+    console.error("LinkedIn token exchange failed", {
+      body: errorBody.slice(0, 500),
+      status: tokenResponse.status
+    });
     throw new AppError("LinkedIn token exchange failed", 401, "LINKEDIN_TOKEN_EXCHANGE_FAILED");
   }
 
-  const tokens = (await tokenResponse.json()) as LinkedInTokenResponse;
+  let tokens: LinkedInTokenResponse;
+
+  try {
+    tokens = (await tokenResponse.json()) as LinkedInTokenResponse;
+  } catch (error) {
+    console.error("LinkedIn token response JSON parsing failed", error);
+    throw new AppError("LinkedIn token response is invalid", 401, "INVALID_LINKEDIN_TOKEN");
+  }
 
   if (!tokens.id_token || !tokens.access_token) {
     throw new AppError("LinkedIn response is missing tokens", 401, "INVALID_LINKEDIN_TOKEN");
   }
 
-  const { payload } = await jwtVerify(tokens.id_token, linkedInJwks, {
-    audience: config.clientId,
-    issuer: LINKEDIN_ISSUER
-  });
+  let payload: Awaited<ReturnType<typeof jwtVerify>>["payload"];
 
-  if (payload.nonce !== nonce) {
+  try {
+    ({ payload } = await jwtVerify(tokens.id_token, linkedInJwks, {
+      audience: config.clientId,
+      clockTolerance: "60s",
+      issuer: LINKEDIN_ISSUER
+    }));
+  } catch (error) {
+    console.error("LinkedIn ID token validation failed", error);
+    throw new AppError("LinkedIn ID token validation failed", 401, "LINKEDIN_ID_TOKEN_INVALID");
+  }
+
+  if (typeof payload.nonce === "string" && payload.nonce !== nonce) {
     throw new AppError("LinkedIn token nonce mismatch", 401, "INVALID_LINKEDIN_NONCE");
   }
 
-  const userInfoResponse = await fetch(LINKEDIN_USERINFO_URL, {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${tokens.access_token}`
-    }
-  });
+  let userInfoResponse: Response;
+
+  try {
+    userInfoResponse = await fetch(LINKEDIN_USERINFO_URL, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${tokens.access_token}`
+      }
+    });
+  } catch (error) {
+    console.error("LinkedIn profile lookup request failed", error);
+    throw new AppError("LinkedIn profile lookup request failed", 401, "LINKEDIN_USERINFO_FAILED");
+  }
 
   if (!userInfoResponse.ok) {
+    const errorBody = await userInfoResponse.text().catch(() => "");
+    console.error("LinkedIn profile lookup failed", {
+      body: errorBody.slice(0, 500),
+      status: userInfoResponse.status
+    });
     throw new AppError("LinkedIn profile lookup failed", 401, "LINKEDIN_USERINFO_FAILED");
   }
 
-  const userInfo = (await userInfoResponse.json()) as LinkedInUserInfoResponse;
+  let userInfo: LinkedInUserInfoResponse;
+
+  try {
+    userInfo = (await userInfoResponse.json()) as LinkedInUserInfoResponse;
+  } catch (error) {
+    console.error("LinkedIn profile response JSON parsing failed", error);
+    throw new AppError("LinkedIn profile response is invalid", 401, "INVALID_LINKEDIN_PROFILE");
+  }
   const linkedInSub = userInfo.sub ?? (typeof payload.sub === "string" ? payload.sub : null);
   const email =
     userInfo.email ??
