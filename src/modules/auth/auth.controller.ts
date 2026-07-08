@@ -169,7 +169,8 @@ export async function linkedInStartController(req: Request, res: Response): Prom
     );
 
     res.redirect(authorizationUrl);
-  } catch {
+  } catch (error) {
+    console.error("LinkedIn start failed", error);
     redirectToLoginError(res, "linkedin_not_configured");
   }
 }
@@ -197,9 +198,13 @@ export async function linkedInCallbackController(req: Request, res: Response): P
     clearLinkedInOAuthCookie(res);
     setSessionCookies(res, session.tokens);
     res.redirect(toClientUrl(getSessionRedirectPath(session, oauthCookie.returnTo)));
-  } catch {
+  } catch (error) {
+    console.error("LinkedIn callback failed", error);
     clearLinkedInOAuthCookie(res);
-    redirectToLoginError(res, "linkedin_failed");
+    redirectToLoginError(
+      res,
+      error instanceof AppError ? error.code.toLowerCase() : "linkedin_failed"
+    );
   }
 }
 

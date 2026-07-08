@@ -139,12 +139,12 @@ export async function verifyLinkedInAuthorizationCode({
     throw new AppError("LinkedIn profile is missing a subject", 401, "INVALID_LINKEDIN_PROFILE");
   }
 
-  if (!email || isEmailVerified !== true) {
-    throw new AppError(
-      "LinkedIn did not return a verified email address",
-      401,
-      "LINKEDIN_EMAIL_NOT_VERIFIED"
-    );
+  if (!email) {
+    throw new AppError("LinkedIn did not return an email address", 401, "LINKEDIN_EMAIL_MISSING");
+  }
+
+  if (isEmailVerified === false) {
+    throw new AppError("LinkedIn email is not verified", 401, "LINKEDIN_EMAIL_NOT_VERIFIED");
   }
 
   return {
