@@ -38,7 +38,7 @@ export async function downloadReportPdfController(
     user,
     company
   );
-  const pdf = createReportPdf(report);
+  const pdf = await createReportPdf(report);
   const filename = `${report.company.displayName}-${report.site.name}-${report.reportingYear.label}-BRSR-report.pdf`
     .replace(/[^a-z0-9.-]+/gi, "-")
     .replace(/-+/g, "-");
