@@ -6,7 +6,7 @@ import { AppError } from "../../shared/errors/AppError.js";
 const LINKEDIN_AUTHORIZATION_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const LINKEDIN_USERINFO_URL = "https://api.linkedin.com/v2/userinfo";
-const LINKEDIN_ISSUER = "https://www.linkedin.com";
+const LINKEDIN_ISSUER = "https://www.linkedin.com/oauth";
 const linkedInJwks = createRemoteJWKSet(new URL("https://www.linkedin.com/oauth/openid/jwks"));
 
 export type LinkedInAuthorizationRequest = {
