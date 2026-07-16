@@ -301,6 +301,10 @@ model DataRecord {
   unit String
   factorKgCo2e Decimal? @map("factor_kg_co2e") @db.Decimal(24, 10)
   calculatedKgCo2e Decimal? @map("calculated_kg_co2e") @db.Decimal(24, 10)
+  scope String?
+  factorSourceSheet String? @map("factor_source_sheet")
+  factorSourceYear Int? @map("factor_source_year")
+  factorSourceVersion String? @map("factor_source_version")
 
   notes String? @db.Text
   metadata Json?
@@ -322,6 +326,7 @@ model DataRecord {
 
   @@index([companyId, reportingYearId])
   @@index([companyId, siteId, reportingYearId])
+  @@index([companyId, siteId, reportingYearId, deletedAt], map: "data_records_company_site_year_deleted_idx")
   @@index([siteId])
   @@index([ghgActivitySelectionId])
   @@index([ghgActivityId])

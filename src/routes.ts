@@ -3,6 +3,7 @@ import { Router } from "express";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { companiesRouter } from "./modules/companies/companies.routes.js";
 import { dataRecordsRouter } from "./modules/dataRecords/dataRecords.routes.js";
+import { emissionsSummaryRouter } from "./modules/emissionsSummary/emissionsSummary.routes.js";
 import { fieldConfigRouter } from "./modules/fieldConfig/fieldConfig.routes.js";
 import { ghgFactorsRouter } from "./modules/ghgFactors/ghgFactors.routes.js";
 import { healthRouter } from "./modules/health/health.routes.js";
@@ -25,6 +26,14 @@ apiRouter.use(
 apiRouter.use(
   "/companies/:companyId/sites/:siteId/reporting-years/:reportingYearId/data-records",
   dataRecordsRouter
+);
+apiRouter.use(
+  "/companies/:companyId/reporting-years/:reportingYearId/emissions-summary",
+  emissionsSummaryRouter
+);
+apiRouter.use(
+  "/companies/:companyId/sites/:siteId/reporting-years/:reportingYearId/emissions-summary",
+  emissionsSummaryRouter
 );
 apiRouter.use(
   "/companies/:companyId/reporting-years/:reportingYearId/ghg-activity-selections",

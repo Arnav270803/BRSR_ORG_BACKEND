@@ -33,6 +33,10 @@ function toDataRecordResponse(record: {
   unit: string;
   factorKgCo2e: Prisma.Decimal | null;
   calculatedKgCo2e: Prisma.Decimal | null;
+  scope: string | null;
+  factorSourceSheet: string | null;
+  factorSourceYear: number | null;
+  factorSourceVersion: string | null;
   notes: string | null;
   metadata: Prisma.JsonValue | null;
   createdByUserId: string;
@@ -70,6 +74,10 @@ function toDataRecordResponse(record: {
     unit: record.unit,
     factorKgCo2e: record.factorKgCo2e?.toString() ?? null,
     calculatedKgCo2e: record.calculatedKgCo2e?.toString() ?? null,
+    scope: record.scope,
+    factorSourceSheet: record.factorSourceSheet,
+    factorSourceYear: record.factorSourceYear,
+    factorSourceVersion: record.factorSourceVersion,
     notes: record.notes,
     metadata: record.metadata,
     createdByUserId: record.createdByUserId,
@@ -160,6 +168,10 @@ export async function createDataRecord(
         unit: selection.ghgActivity.unit,
         factorKgCo2e,
         calculatedKgCo2e,
+        scope: selection.ghgActivity.scope,
+        factorSourceSheet: selection.ghgActivity.sourceSheet,
+        factorSourceYear: selection.ghgActivity.sourceYear,
+        factorSourceVersion: selection.ghgActivity.sourceVersion,
         notes: input.notes ?? null,
         metadata: input.metadata ?? Prisma.JsonNull,
         createdByUserId: user.id
@@ -201,7 +213,11 @@ export async function createDataRecord(
           quantity: quantity.toString(),
           unit: selection.ghgActivity.unit,
           factorKgCo2e: factorKgCo2e?.toString() ?? null,
-          calculatedKgCo2e: calculatedKgCo2e?.toString() ?? null
+          calculatedKgCo2e: calculatedKgCo2e?.toString() ?? null,
+          scope: selection.ghgActivity.scope,
+          factorSourceSheet: selection.ghgActivity.sourceSheet,
+          factorSourceYear: selection.ghgActivity.sourceYear,
+          factorSourceVersion: selection.ghgActivity.sourceVersion
         }
       }
     });

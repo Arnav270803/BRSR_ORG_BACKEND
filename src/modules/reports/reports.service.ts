@@ -1,9 +1,10 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "../../infra/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import type { AuthenticatedUserContext, CompanyAccessContext } from "../../shared/types.js";
 import { toIsoDate } from "../../shared/utils/date.js";
+import { getEmissionsSummaryForContext } from "../emissionsSummary/emissionsSummary.service.js";
 import { resolveCompanySiteForAccess } from "../sites/sites.service.js";
 
 type ReportRecord = {
@@ -26,16 +27,8 @@ type TotalsRow = {
   totalKgCo2e: string;
 };
 
-function decimalToNumber(value: Prisma.Decimal | null | undefined) {
-  if (!value) {
-    return 0;
-  }
-
-  return Number(value.toString());
-}
-
-function formatDecimal(value: number) {
-  return value.toFixed(3).replace(/\.?0+$/, "");
+function formatDecimal(value: Prisma.Decimal) {
+  return value.toFixed(10).replace(/(?:\.0+|(\.\d*?[1-9])0+)$/, "$1");
 }
 
 function uniqueTextParts(parts: Array<string | null | undefined>) {
@@ -65,26 +58,33 @@ function getActivityLabel(activity: {
 }
 
 function addTotal(
-  map: Map<string, { recordCount: number; totalKgCo2e: number }>,
+  map: Map<string, { recordCount: number; totalKgCo2e: Prisma.Decimal }>,
   key: string,
-  value: number
+  value: Prisma.Decimal | null
 ) {
-  const current = map.get(key) ?? { recordCount: 0, totalKgCo2e: 0 };
+  const current = map.get(key) ?? {
+    recordCount: 0,
+    totalKgCo2e: new Prisma.Decimal(0)
+  };
 
   map.set(key, {
     recordCount: current.recordCount + 1,
-    totalKgCo2e: current.totalKgCo2e + value
+    totalKgCo2e: current.totalKgCo2e.add(value ?? 0)
   });
 }
 
-function mapTotals(map: Map<string, { recordCount: number; totalKgCo2e: number }>): TotalsRow[] {
+function mapTotals(
+  map: Map<string, { recordCount: number; totalKgCo2e: Prisma.Decimal }>
+): TotalsRow[] {
   return [...map.entries()]
     .map(([name, total]) => ({
       name,
       recordCount: total.recordCount,
       totalKgCo2e: formatDecimal(total.totalKgCo2e)
     }))
-    .sort((left, right) => Number(right.totalKgCo2e) - Number(left.totalKgCo2e));
+    .sort((left, right) =>
+      new Prisma.Decimal(right.totalKgCo2e).comparedTo(new Prisma.Decimal(left.totalKgCo2e))
+    );
 }
 
 export async function generateCompanyReportingYearReport(
@@ -176,7 +176,7 @@ export async function generateCompanyReportingYearReport(
     recordDate: toIsoDate(record.recordDate),
     activity: getActivityLabel(record.ghgActivity),
     category: record.ghgActivity.category.name,
-    scope: record.ghgActivity.scope,
+    scope: record.scope ?? record.ghgActivity.scope,
     quantity: record.quantity.toString(),
     unit: record.unit,
     factorKgCo2e: record.factorKgCo2e?.toString() ?? null,
@@ -184,20 +184,21 @@ export async function generateCompanyReportingYearReport(
     createdBy: record.createdBy.name ?? record.createdBy.email,
     notes: record.notes
   }));
-  const totalsByScope = new Map<string, { recordCount: number; totalKgCo2e: number }>();
-  const totalsByCategory = new Map<string, { recordCount: number; totalKgCo2e: number }>();
-  const totalsByActivity = new Map<string, { recordCount: number; totalKgCo2e: number }>();
-  let totalKgCo2e = 0;
+  const totalsByActivity = new Map<
+    string,
+    { recordCount: number; totalKgCo2e: Prisma.Decimal }
+  >();
 
   for (const record of reportingYear.dataRecords) {
-    const calculatedKgCo2e = decimalToNumber(record.calculatedKgCo2e);
     const activityName = getActivityLabel(record.ghgActivity);
 
-    totalKgCo2e += calculatedKgCo2e;
-    addTotal(totalsByScope, record.ghgActivity.scope ?? "Scope not set", calculatedKgCo2e);
-    addTotal(totalsByCategory, record.ghgActivity.category.name, calculatedKgCo2e);
-    addTotal(totalsByActivity, activityName, calculatedKgCo2e);
+    addTotal(totalsByActivity, activityName, record.calculatedKgCo2e);
   }
+  const emissionsSummary = await getEmissionsSummaryForContext(
+    companyId,
+    reportingYearId,
+    site.id
+  );
 
   return {
     generatedAt: new Date().toISOString(),
@@ -232,20 +233,36 @@ export async function generateCompanyReportingYearReport(
       selectedActivities
     },
     emissionSummary: {
-      recordCount: records.length,
-      totalKgCo2e: formatDecimal(totalKgCo2e),
-      totalsByScope: mapTotals(totalsByScope),
-      totalsByCategory: mapTotals(totalsByCategory),
+      recordCount: emissionsSummary.coverage.totalRecords,
+      calculatedRecordCount: emissionsSummary.coverage.calculatedRecords,
+      uncalculatedRecordCount: emissionsSummary.coverage.uncalculatedRecords,
+      calculationCoveragePercent: emissionsSummary.coverage.calculationCoveragePercent,
+      totalKgCo2e: emissionsSummary.totals.grossKgCo2e,
+      outsideScopesKgCo2e: emissionsSummary.totals.outsideScopesKgCo2e,
+      unclassifiedKgCo2e: emissionsSummary.totals.unclassifiedKgCo2e,
+      totalsByScope: emissionsSummary.scopes
+        .filter((scope) => scope.recordCount > 0)
+        .map((scope) => ({
+          name: scope.label,
+          recordCount: scope.recordCount,
+          totalKgCo2e: scope.totalKgCo2e
+        })),
+      totalsByCategory: emissionsSummary.categories.map((category) => ({
+        name: category.name,
+        recordCount: category.recordCount,
+        totalKgCo2e: category.totalKgCo2e
+      })),
       totalsByActivity: mapTotals(totalsByActivity)
     },
     dataRecords: records,
     methodology: {
       formula: "quantity x emission factor",
-      note: "Emission totals are calculated from submitted data records using the stored GHG factor catalog in the database."
+      note: "Gross emissions include Scope 1, Scope 2, and Scope 3 records calculated from the factor snapshot stored with each submitted data record. Outside-scope and unclassified values are reported separately."
     },
     limitations: [
       "Evidence uploads are not included in this V1 report.",
       "Approval workflow and final statutory BRSR filing format can be added later.",
+      "Records without a conversion factor are counted but excluded from calculated emission totals.",
       "This report reflects active, non-deleted records at generation time."
     ]
   };

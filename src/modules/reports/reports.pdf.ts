@@ -162,8 +162,8 @@ function drawCover(doc: PDFKit.PDFDocument, report: ReportData) {
   doc.moveDown(1.2);
 
   drawKpiCards(doc, [
-    { label: "Total emissions", value: `${formatNumber(report.emissionSummary.totalKgCo2e)} kg CO2e` },
-    { label: "Total tCO2e", value: toTonnes(report.emissionSummary.totalKgCo2e) },
+    { label: "Gross emissions", value: `${formatNumber(report.emissionSummary.totalKgCo2e)} kg CO2e` },
+    { label: "Gross tCO2e", value: toTonnes(report.emissionSummary.totalKgCo2e) },
     { label: "Submitted records", value: formatNumber(report.emissionSummary.recordCount) },
     { label: "Selected activities", value: formatNumber(report.ghgActivitySetup.selectedActivityCount) }
   ]);
@@ -391,8 +391,8 @@ export async function createReportPdf(report: ReportData) {
 
   sectionTitle(doc, "Emissions summary", "Scope and category breakdown");
   drawKpiCards(doc, [
-    { label: "Total kg CO2e", value: formatNumber(report.emissionSummary.totalKgCo2e) },
-    { label: "Total tCO2e", value: toTonnes(report.emissionSummary.totalKgCo2e) },
+    { label: "Gross kg CO2e", value: formatNumber(report.emissionSummary.totalKgCo2e) },
+    { label: "Gross tCO2e", value: toTonnes(report.emissionSummary.totalKgCo2e) },
     { label: "Records", value: formatNumber(report.emissionSummary.recordCount) },
     { label: "Activities", value: formatNumber(report.ghgActivitySetup.selectedActivityCount) }
   ]);
