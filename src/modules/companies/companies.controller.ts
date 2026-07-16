@@ -30,7 +30,7 @@ export async function getCurrentCompanyController(_req: Request, res: Response) 
 export async function getCompanyWorkspaceController(req: Request<{ companyId: string }>, res: Response) {
   const user = getAuthenticatedUser(res);
   const companyId = req.params.companyId;
-  const result = await getCompanyWorkspace(companyId, user.id, user.isSuperAdmin);
+  const result = await getCompanyWorkspace(companyId, user.id, user.isPlatformOwner);
 
   res.status(200).json({
     data: result

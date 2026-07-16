@@ -1,8 +1,10 @@
 import type { Request, RequestHandler, Response } from "express";
 
+import { env } from "../config/env.js";
 import { verifyAccessToken } from "../infra/auth/jwt.js";
 import { ACCESS_TOKEN_COOKIE_NAME } from "../shared/constants.js";
 import { AppError } from "../shared/errors/AppError.js";
+import { matchesPlatformOwnerEmail } from "../shared/security/platformOwner.js";
 import type {
   AuthenticatedUserContext,
   CompanyAccessContext,
@@ -43,7 +45,7 @@ export const authenticate: RequestHandler = async (req, res, next) => {
     res.locals.user = {
       id: payload.userId,
       email: payload.email,
-      isSuperAdmin: payload.isSuperAdmin
+      isPlatformOwner: matchesPlatformOwnerEmail(payload.email, env.PLATFORM_OWNER_EMAIL)
     };
 
     next();

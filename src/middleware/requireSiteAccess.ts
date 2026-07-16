@@ -2,7 +2,7 @@ import { CompanySiteStatus, MembershipStatus } from "@prisma/client";
 import type { RequestHandler } from "express";
 
 import { prisma } from "../infra/prisma/client.js";
-import { APP_ROLES } from "../shared/constants.js";
+import { COMPANY_ROLES } from "../shared/constants.js";
 import { AppError } from "../shared/errors/AppError.js";
 import { getAuthenticatedUser, getCompanyAccess } from "./authenticate.js";
 
@@ -46,7 +46,7 @@ export function requireSiteAccess(options: RequireSiteAccessOptions = {}): Reque
         throw new AppError("Site not found", 404, "SITE_NOT_FOUND");
       }
 
-      if (user.isSuperAdmin || company.role === APP_ROLES.ADMIN) {
+      if (user.isPlatformOwner || company.role === COMPANY_ROLES.ADMIN) {
         res.locals.site = {
           siteId,
           role: company.role

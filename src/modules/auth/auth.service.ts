@@ -7,6 +7,7 @@ import { signAccessToken, verifyAccessToken } from "../../infra/auth/jwt.js";
 import { prisma } from "../../infra/prisma/client.js";
 import { ACCESS_TOKEN_TTL_MINUTES, REFRESH_TOKEN_TTL_DAYS } from "../../shared/constants.js";
 import { AppError } from "../../shared/errors/AppError.js";
+import { matchesPlatformOwnerEmail } from "../../shared/security/platformOwner.js";
 import { createRandomToken, hashToken } from "../../shared/utils/crypto.js";
 import { addDays, addMinutes, now } from "../../shared/utils/date.js";
 
@@ -38,7 +39,7 @@ type SessionContext = {
     email: string;
     name: string | null;
     avatarUrl: string | null;
-    isSuperAdmin: boolean;
+    isPlatformOwner: boolean;
   };
   memberships: Array<{
     companyId: string;
@@ -63,8 +64,8 @@ type ExternalIdentity = {
   googleSub?: string | null;
 };
 
-function isSuperAdminEmail(email: string): boolean {
-  return env.SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
+function isPlatformOwnerEmail(email: string): boolean {
+  return matchesPlatformOwnerEmail(email, env.PLATFORM_OWNER_EMAIL);
 }
 
 function toSessionContext(user: UserSessionRecord): SessionContext {
@@ -72,13 +73,15 @@ function toSessionContext(user: UserSessionRecord): SessionContext {
     (membership) => membership.status === MembershipStatus.ACTIVE
   );
 
+  const isPlatformOwner = isPlatformOwnerEmail(user.email);
+
   return {
     user: {
       id: user.id,
       email: user.email,
       name: user.name,
       avatarUrl: user.avatarUrl,
-      isSuperAdmin: user.isSuperAdmin
+      isPlatformOwner
     },
     memberships: activeMemberships.map((membership) => ({
       companyId: membership.companyId,
@@ -86,7 +89,7 @@ function toSessionContext(user: UserSessionRecord): SessionContext {
       role: membership.role,
       status: membership.status
     })),
-    needsCompanyOnboarding: !user.isSuperAdmin && activeMemberships.length === 0
+    needsCompanyOnboarding: !isPlatformOwner && activeMemberships.length === 0
   };
 }
 
@@ -127,8 +130,7 @@ async function createSessionForUser(userId: string, metadata: RequestMetadata): 
 
   const accessToken = await signAccessToken({
     userId: user.id,
-    email: user.email,
-    isSuperAdmin: user.isSuperAdmin
+    email: user.email
   });
 
   return {
@@ -190,9 +192,23 @@ export async function loginWithLinkedInAuthorizationCode({
 
 async function findOrCreateUserFromIdentity(identity: ExternalIdentity) {
   const loginTime = now();
-  const isSuperAdmin = isSuperAdminEmail(identity.email);
+  const isPlatformOwner = isPlatformOwnerEmail(identity.email);
 
   return prisma.$transaction(async (tx) => {
+    if (isPlatformOwner) {
+      await tx.user.updateMany({
+        where: {
+          isSuperAdmin: true,
+          email: {
+            not: identity.email
+          }
+        },
+        data: {
+          isSuperAdmin: false
+        }
+      });
+    }
+
     const existingIdentity = await tx.userIdentity.findUnique({
       where: {
         provider_providerUserId: {
@@ -215,7 +231,7 @@ async function findOrCreateUserFromIdentity(identity: ExternalIdentity) {
           name: identity.name,
           avatarUrl: identity.avatarUrl,
           googleSub: identity.googleSub ?? existingIdentity.user.googleSub,
-          isSuperAdmin,
+          isSuperAdmin: isPlatformOwner,
           lastLoginAt: loginTime
         }
       });
@@ -253,7 +269,7 @@ async function findOrCreateUserFromIdentity(identity: ExternalIdentity) {
           name: identity.name,
           avatarUrl: identity.avatarUrl,
           googleSub: identity.googleSub ?? existingUser.googleSub,
-          isSuperAdmin,
+          isSuperAdmin: isPlatformOwner,
           lastLoginAt: loginTime
         }
       });
@@ -265,7 +281,7 @@ async function findOrCreateUserFromIdentity(identity: ExternalIdentity) {
         email: identity.email,
         name: identity.name,
         avatarUrl: identity.avatarUrl,
-        isSuperAdmin,
+        isSuperAdmin: isPlatformOwner,
         lastLoginAt: loginTime,
         identities: {
           create: {

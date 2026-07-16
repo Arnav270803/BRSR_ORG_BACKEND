@@ -11,8 +11,7 @@ const accessTokenSecret = textEncoder.encode(env.JWT_ACCESS_SECRET);
 const accessTokenPayloadSchema = z.object({
   tokenUse: z.literal("access"),
   userId: z.string().uuid(),
-  email: z.string().email(),
-  isSuperAdmin: z.boolean()
+  email: z.string().email()
 });
 
 export type AccessTokenPayload = z.infer<typeof accessTokenPayloadSchema>;
@@ -21,8 +20,7 @@ export async function signAccessToken(payload: Omit<AccessTokenPayload, "tokenUs
   return new SignJWT({
     tokenUse: "access",
     userId: payload.userId,
-    email: payload.email,
-    isSuperAdmin: payload.isSuperAdmin
+    email: payload.email
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(payload.userId)

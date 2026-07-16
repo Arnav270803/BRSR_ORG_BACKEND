@@ -175,7 +175,11 @@ export async function getCurrentCompanyForUser(userId: string) {
   };
 }
 
-export async function getCompanyWorkspace(companyId: string, userId: string, isSuperAdmin: boolean) {
+export async function getCompanyWorkspace(
+  companyId: string,
+  userId: string,
+  isPlatformOwner: boolean
+) {
   const company = await prisma.company.findUnique({
     where: { id: companyId },
     include: {
@@ -210,12 +214,12 @@ export async function getCompanyWorkspace(companyId: string, userId: string, isS
 
   const membership = company.memberships.find((item) => item.userId === userId);
 
-  if (!isSuperAdmin && !membership) {
+  if (!isPlatformOwner && !membership) {
     throw new AppError("Company access denied", 403, "COMPANY_ACCESS_DENIED");
   }
   const sites = await prisma.companySite.findMany({
     where:
-      isSuperAdmin || membership?.role === MembershipRole.ADMIN
+      isPlatformOwner || membership?.role === MembershipRole.ADMIN
         ? {
             companyId,
             status: CompanySiteStatus.ACTIVE
@@ -235,7 +239,8 @@ export async function getCompanyWorkspace(companyId: string, userId: string, isS
 
   return {
     company: toCompanySummary(company),
-    viewerRole: isSuperAdmin ? "SUPER_ADMIN" : membership?.role,
+    viewerRole: isPlatformOwner ? MembershipRole.ADMIN : membership?.role,
+    isPlatformOwner,
     activeMemberCount: company.memberships.length,
     sites: sites.map((site) => ({
       id: site.id,

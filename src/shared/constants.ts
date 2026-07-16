@@ -17,12 +17,6 @@ export const COMPANY_ROLES = {
   USER: "USER"
 } as const;
 
-export const APP_ROLES = {
-  SUPER_ADMIN: "SUPER_ADMIN",
-  ADMIN: "ADMIN",
-  USER: "USER"
-} as const;
-
 export const MEMBERSHIP_STATUSES = {
   ACTIVE: "ACTIVE",
   DISABLED: "DISABLED"

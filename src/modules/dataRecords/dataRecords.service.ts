@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../../infra/prisma/client.js";
-import { APP_ROLES } from "../../shared/constants.js";
+import { COMPANY_ROLES } from "../../shared/constants.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import type { AuthenticatedUserContext, CompanyAccessContext } from "../../shared/types.js";
 import { now, toIsoDate } from "../../shared/utils/date.js";
@@ -298,7 +298,7 @@ export async function softDeleteDataRecord(
     throw new AppError("Data record not found", 404, "DATA_RECORD_NOT_FOUND");
   }
 
-  if (companyAccess.role === APP_ROLES.USER && dataRecord.createdByUserId !== user.id) {
+  if (companyAccess.role === COMPANY_ROLES.USER && dataRecord.createdByUserId !== user.id) {
     throw new AppError("Users can delete only their own records", 403, "DATA_RECORD_DELETE_DENIED");
   }
 

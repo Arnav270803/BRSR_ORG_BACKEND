@@ -2,7 +2,7 @@ import { CompanySiteStatus, MembershipRole, MembershipStatus } from "@prisma/cli
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../infra/prisma/client.js";
-import { APP_ROLES } from "../../shared/constants.js";
+import { COMPANY_ROLES } from "../../shared/constants.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import type { AuthenticatedUserContext, CompanyAccessContext } from "../../shared/types.js";
 import type {
@@ -148,7 +148,7 @@ export async function resolveCompanySiteForAccess(
     throw new AppError("Site not found", 404, "SITE_NOT_FOUND");
   }
 
-  if (user.isSuperAdmin || companyAccess.role === APP_ROLES.ADMIN) {
+  if (user.isPlatformOwner || companyAccess.role === COMPANY_ROLES.ADMIN) {
     return site;
   }
 
@@ -177,7 +177,7 @@ export async function listCompanySites(
   companyAccess: CompanyAccessContext
 ) {
   const where =
-    user.isSuperAdmin || companyAccess.role === APP_ROLES.ADMIN
+    user.isPlatformOwner || companyAccess.role === COMPANY_ROLES.ADMIN
       ? {
           companyId,
           status: CompanySiteStatus.ACTIVE
@@ -231,8 +231,8 @@ export async function getCompanySite(
   }
 
   if (
-    !user.isSuperAdmin &&
-    companyAccess.role !== APP_ROLES.ADMIN &&
+    !user.isPlatformOwner &&
+    companyAccess.role !== COMPANY_ROLES.ADMIN &&
     site.memberships.length === 0
   ) {
     throw new AppError("Site access denied", 403, "SITE_ACCESS_DENIED");

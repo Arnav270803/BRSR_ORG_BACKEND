@@ -2,7 +2,7 @@ import { MembershipStatus } from "@prisma/client";
 import type { RequestHandler } from "express";
 
 import { prisma } from "../infra/prisma/client.js";
-import { APP_ROLES } from "../shared/constants.js";
+import { COMPANY_ROLES } from "../shared/constants.js";
 import { AppError } from "../shared/errors/AppError.js";
 import type { CompanyRole } from "../shared/types.js";
 import { getAuthenticatedUser } from "./authenticate.js";
@@ -32,7 +32,7 @@ export function requireCompanyAccess(options: RequireCompanyAccessOptions = {}):
         throw new AppError("Company ID is required", 400, "COMPANY_ID_REQUIRED");
       }
 
-      if (user.isSuperAdmin) {
+      if (user.isPlatformOwner) {
         const company = await prisma.company.findUnique({
           where: { id: companyId },
           select: { id: true }
@@ -44,7 +44,7 @@ export function requireCompanyAccess(options: RequireCompanyAccessOptions = {}):
 
         res.locals.company = {
           companyId,
-          role: APP_ROLES.SUPER_ADMIN
+          role: COMPANY_ROLES.ADMIN
         };
 
         next();

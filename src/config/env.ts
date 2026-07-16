@@ -48,13 +48,20 @@ if (!parsedEnv.success) {
 }
 
 const values = parsedEnv.data;
+const platformOwnerEmails = values.SUPER_ADMIN_EMAILS.split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
+if (platformOwnerEmails.length > 1) {
+  throw new Error(
+    "Invalid environment configuration: SUPER_ADMIN_EMAILS must contain at most one platform owner email"
+  );
+}
 
 export const env = {
   ...values,
   API_PORT: values.PORT ?? values.API_PORT,
-  SUPER_ADMIN_EMAILS: values.SUPER_ADMIN_EMAILS.split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean)
+  PLATFORM_OWNER_EMAIL: platformOwnerEmails[0] ?? null
 } as const;
 
 export type AppEnv = typeof env;
