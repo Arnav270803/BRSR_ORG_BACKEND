@@ -17,6 +17,8 @@ type ReportRecord = {
   unit: string;
   factorKgCo2e: string | null;
   calculatedKgCo2e: string | null;
+  dataOrigin: string;
+  vendor: string | null;
   createdBy: string;
   notes: string | null;
 };
@@ -145,6 +147,12 @@ export async function generateCompanyReportingYearReport(
             include: {
               category: true
             }
+          },
+          vendor: {
+            select: {
+              displayName: true,
+              legalName: true
+            }
           }
         }
       }
@@ -181,10 +189,16 @@ export async function generateCompanyReportingYearReport(
     unit: record.unit,
     factorKgCo2e: record.factorKgCo2e?.toString() ?? null,
     calculatedKgCo2e: record.calculatedKgCo2e?.toString() ?? null,
+    dataOrigin: record.dataOrigin === "VENDOR" ? "Vendor" : "Internal",
+    vendor: record.vendor?.displayName ?? record.vendor?.legalName ?? null,
     createdBy: record.createdBy.name ?? record.createdBy.email,
     notes: record.notes
   }));
   const totalsByActivity = new Map<
+    string,
+    { recordCount: number; totalKgCo2e: Prisma.Decimal }
+  >();
+  const totalsByVendor = new Map<
     string,
     { recordCount: number; totalKgCo2e: Prisma.Decimal }
   >();
@@ -193,6 +207,13 @@ export async function generateCompanyReportingYearReport(
     const activityName = getActivityLabel(record.ghgActivity);
 
     addTotal(totalsByActivity, activityName, record.calculatedKgCo2e);
+    if (record.vendor) {
+      addTotal(
+        totalsByVendor,
+        record.vendor.displayName ?? record.vendor.legalName,
+        record.calculatedKgCo2e
+      );
+    }
   }
   const emissionsSummary = await getEmissionsSummaryForContext(
     companyId,
@@ -252,7 +273,8 @@ export async function generateCompanyReportingYearReport(
         recordCount: category.recordCount,
         totalKgCo2e: category.totalKgCo2e
       })),
-      totalsByActivity: mapTotals(totalsByActivity)
+      totalsByActivity: mapTotals(totalsByActivity),
+      totalsByVendor: mapTotals(totalsByVendor)
     },
     dataRecords: records,
     methodology: {
@@ -263,6 +285,7 @@ export async function generateCompanyReportingYearReport(
       "Evidence uploads are not included in this V1 report.",
       "Approval workflow and final statutory BRSR filing format can be added later.",
       "Records without a conversion factor are counted but excluded from calculated emission totals.",
+      "Vendor totals include approved vendor submissions only.",
       "This report reflects active, non-deleted records at generation time."
     ]
   };

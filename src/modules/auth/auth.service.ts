@@ -23,6 +23,12 @@ type UserSessionRecord = Prisma.UserGetPayload<{
         company: true;
       };
     };
+    vendorMemberships: {
+      include: {
+        company: true;
+        vendor: true;
+      };
+    };
   };
 }>;
 
@@ -44,6 +50,14 @@ type SessionContext = {
   memberships: Array<{
     companyId: string;
     companyDisplayName: string;
+    role: string;
+    status: string;
+  }>;
+  vendorMemberships: Array<{
+    companyId: string;
+    companyDisplayName: string;
+    vendorId: string;
+    vendorDisplayName: string;
     role: string;
     status: string;
   }>;
@@ -72,6 +86,11 @@ function toSessionContext(user: UserSessionRecord): SessionContext {
   const activeMemberships = user.memberships.filter(
     (membership) => membership.status === MembershipStatus.ACTIVE
   );
+  const activeVendorMemberships = user.vendorMemberships.filter(
+    (membership) =>
+      membership.status === MembershipStatus.ACTIVE &&
+      membership.vendor.status === "ACTIVE"
+  );
 
   const isPlatformOwner = isPlatformOwnerEmail(user.email);
 
@@ -89,7 +108,18 @@ function toSessionContext(user: UserSessionRecord): SessionContext {
       role: membership.role,
       status: membership.status
     })),
-    needsCompanyOnboarding: !isPlatformOwner && activeMemberships.length === 0
+    vendorMemberships: activeVendorMemberships.map((membership) => ({
+      companyId: membership.companyId,
+      companyDisplayName: membership.company.displayName,
+      vendorId: membership.vendorId,
+      vendorDisplayName: membership.vendor.displayName,
+      role: membership.role,
+      status: membership.status
+    })),
+    needsCompanyOnboarding:
+      !isPlatformOwner &&
+      activeMemberships.length === 0 &&
+      activeVendorMemberships.length === 0
   };
 }
 
@@ -100,6 +130,12 @@ async function getSessionUser(userId: string): Promise<UserSessionRecord> {
       memberships: {
         include: {
           company: true
+        }
+      },
+      vendorMemberships: {
+        include: {
+          company: true,
+          vendor: true
         }
       }
     }

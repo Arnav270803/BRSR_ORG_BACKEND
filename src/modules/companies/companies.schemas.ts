@@ -28,6 +28,7 @@ export const createCompanySchema = z.object({
   employeeCountRange: optionalText,
   contactPhone: optionalText,
   logoUrl: z.string().trim().url().optional(),
+  vendorTrackingEnabled: z.boolean().optional().default(false),
   site: z
     .object({
       name: z.string().trim().min(1, "Site name is required"),
@@ -40,4 +41,9 @@ export const createCompanySchema = z.object({
     .optional()
 });
 
+export const updateCompanySettingsSchema = z.object({
+  vendorTrackingEnabled: z.boolean()
+});
+
 export type CreateCompanyInput = z.infer<typeof createCompanySchema>;
+export type UpdateCompanySettingsInput = z.infer<typeof updateCompanySettingsSchema>;

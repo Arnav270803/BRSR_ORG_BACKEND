@@ -8,7 +8,8 @@ import { matchesPlatformOwnerEmail } from "../shared/security/platformOwner.js";
 import type {
   AuthenticatedUserContext,
   CompanyAccessContext,
-  SiteAccessContext
+  SiteAccessContext,
+  VendorAccessContext
 } from "../shared/types.js";
 
 function getSignedCookie(req: Request, name: string): string | null {
@@ -82,4 +83,14 @@ export function getSiteAccess(res: Response): SiteAccessContext {
   }
 
   return site;
+}
+
+export function getVendorAccess(res: Response): VendorAccessContext {
+  const vendor = res.locals.vendor as VendorAccessContext | undefined;
+
+  if (!vendor) {
+    throw new AppError("Vendor access context required", 500, "VENDOR_CONTEXT_REQUIRED");
+  }
+
+  return vendor;
 }

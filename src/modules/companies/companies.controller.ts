@@ -1,11 +1,15 @@
 import type { Request, Response } from "express";
 
 import { getAuthenticatedUser } from "../../middleware/authenticate.js";
-import { createCompanySchema } from "./companies.schemas.js";
+import {
+  createCompanySchema,
+  updateCompanySettingsSchema
+} from "./companies.schemas.js";
 import {
   createCompanyForUser,
   getCompanyWorkspace,
-  getCurrentCompanyForUser
+  getCurrentCompanyForUser,
+  updateCompanySettings
 } from "./companies.service.js";
 
 export async function createCompanyController(req: Request, res: Response) {
@@ -31,6 +35,19 @@ export async function getCompanyWorkspaceController(req: Request<{ companyId: st
   const user = getAuthenticatedUser(res);
   const companyId = req.params.companyId;
   const result = await getCompanyWorkspace(companyId, user.id, user.isPlatformOwner);
+
+  res.status(200).json({
+    data: result
+  });
+}
+
+export async function updateCompanySettingsController(
+  req: Request<{ companyId: string }>,
+  res: Response
+) {
+  const user = getAuthenticatedUser(res);
+  const input = updateCompanySettingsSchema.parse(req.body);
+  const result = await updateCompanySettings(req.params.companyId, input, user.id);
 
   res.status(200).json({
     data: result

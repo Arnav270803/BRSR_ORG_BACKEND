@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { VendorTrackingMode, type Prisma } from "@prisma/client";
 
 import { prisma } from "../../infra/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
@@ -27,6 +27,7 @@ function toSelectedActivityResponse(selection: {
   id: string;
   siteId: string;
   customLabel: string | null;
+  vendorTrackingMode: VendorTrackingMode;
   selectedAt: Date;
   ghgActivity: {
     id: string;
@@ -55,6 +56,7 @@ function toSelectedActivityResponse(selection: {
     selectionId: selection.id,
     siteId: selection.siteId,
     customLabel: selection.customLabel,
+    vendorTrackingMode: selection.vendorTrackingMode,
     selectedAt: selection.selectedAt.toISOString(),
     activity: {
       id: activity.id,
@@ -162,6 +164,24 @@ export async function replaceCompanyGhgActivitySelections(
   const site = await resolveCompanySiteForAccess(companyId, siteId, user, companyAccess);
 
   const activityIds = [...new Set(input.activityIds)];
+  const hasVendorTracking = Object.values(input.vendorTrackingModes).some(
+    (mode) => mode !== VendorTrackingMode.NONE
+  );
+
+  if (hasVendorTracking) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { vendorTrackingEnabled: true }
+    });
+
+    if (!company?.vendorTrackingEnabled) {
+      throw new AppError(
+        "Enable vendor tracking in company settings before assigning vendor activities",
+        400,
+        "VENDOR_TRACKING_NOT_ENABLED"
+      );
+    }
+  }
   const activities = await prisma.ghgActivity.findMany({
     where: {
       id: {
@@ -189,7 +209,8 @@ export async function replaceCompanyGhgActivitySelections(
       isEnabled: true
     },
     select: {
-      ghgActivityId: true
+      ghgActivityId: true,
+      vendorTrackingMode: true
     }
   });
   const beforeActivityIds = existingSelections.map((selection) => selection.ghgActivityId);
@@ -242,7 +263,9 @@ export async function replaceCompanyGhgActivitySelections(
           isEnabled: true,
           disabledAt: null,
           selectedAt: currentTime,
-          selectedByUserId: actorUserId
+          selectedByUserId: actorUserId,
+          vendorTrackingMode:
+            input.vendorTrackingModes[activityId] ?? VendorTrackingMode.NONE
         },
         create: {
           companyId,
@@ -250,7 +273,9 @@ export async function replaceCompanyGhgActivitySelections(
           reportingYearId,
           ghgActivityId: activityId,
           selectedAt: currentTime,
-          selectedByUserId: actorUserId
+          selectedByUserId: actorUserId,
+          vendorTrackingMode:
+            input.vendorTrackingModes[activityId] ?? VendorTrackingMode.NONE
         }
       });
     }
@@ -264,11 +289,18 @@ export async function replaceCompanyGhgActivitySelections(
         entityId: reportingYearId,
         beforeJson: {
           activityIds: beforeActivityIds,
+          vendorTrackingModes: Object.fromEntries(
+            existingSelections.map((selection) => [
+              selection.ghgActivityId,
+              selection.vendorTrackingMode
+            ])
+          ),
           siteId: site.id,
           count: beforeActivityIds.length
         },
         afterJson: {
           activityIds,
+          vendorTrackingModes: input.vendorTrackingModes,
           siteId: site.id,
           count: activityIds.length
         }

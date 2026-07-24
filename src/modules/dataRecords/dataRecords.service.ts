@@ -1,4 +1,9 @@
-import { Prisma } from "@prisma/client";
+import {
+  DataOrigin,
+  Prisma,
+  VendorStatus,
+  VendorTrackingMode
+} from "@prisma/client";
 
 import { prisma } from "../../infra/prisma/client.js";
 import { COMPANY_ROLES } from "../../shared/constants.js";
@@ -39,6 +44,9 @@ function toDataRecordResponse(record: {
   factorSourceVersion: string | null;
   notes: string | null;
   metadata: Prisma.JsonValue | null;
+  dataOrigin: DataOrigin;
+  vendorId: string | null;
+  vendorSubmissionRecordId: string | null;
   createdByUserId: string;
   deletedByUserId: string | null;
   deletedAt: Date | null;
@@ -61,6 +69,11 @@ function toDataRecordResponse(record: {
     email: string;
     name: string | null;
   };
+  vendor?: {
+    id: string;
+    displayName: string;
+    vendorCode: string | null;
+  } | null;
 }) {
   return {
     id: record.id,
@@ -80,6 +93,10 @@ function toDataRecordResponse(record: {
     factorSourceVersion: record.factorSourceVersion,
     notes: record.notes,
     metadata: record.metadata,
+    dataOrigin: record.dataOrigin,
+    vendorId: record.vendorId,
+    vendor: record.vendor ?? null,
+    vendorSubmissionRecordId: record.vendorSubmissionRecordId,
     createdByUserId: record.createdByUserId,
     createdBy: record.createdBy,
     deletedByUserId: record.deletedByUserId,
@@ -139,7 +156,12 @@ export async function createDataRecord(
       isEnabled: true
     },
     include: {
-      ghgActivity: true
+      ghgActivity: true,
+      company: {
+        select: {
+          vendorTrackingEnabled: true
+        }
+      }
     }
   });
 
@@ -148,6 +170,52 @@ export async function createDataRecord(
       "GHG activity is not selected for this reporting year",
       400,
       "GHG_ACTIVITY_NOT_SELECTED"
+    );
+  }
+
+  if (
+    selection.company.vendorTrackingEnabled &&
+    selection.vendorTrackingMode === VendorTrackingMode.REQUIRED &&
+    !input.vendorId
+  ) {
+    throw new AppError(
+      "A vendor is required for this GHG activity",
+      400,
+      "VENDOR_REQUIRED_FOR_ACTIVITY"
+    );
+  }
+
+  if (input.vendorId && !selection.company.vendorTrackingEnabled) {
+    throw new AppError(
+      "Enable vendor tracking before attributing records to a vendor",
+      409,
+      "VENDOR_TRACKING_DISABLED"
+    );
+  }
+
+  const vendor = input.vendorId
+    ? await prisma.vendor.findFirst({
+        where: {
+          id: input.vendorId,
+          companyId,
+          status: VendorStatus.ACTIVE,
+          siteAssignments: {
+            some: {
+              siteId: site.id
+            }
+          }
+        },
+        select: {
+          id: true
+        }
+      })
+    : null;
+
+  if (input.vendorId && !vendor) {
+    throw new AppError(
+      "Vendor is not active or assigned to this site",
+      400,
+      "VENDOR_SITE_ASSIGNMENT_REQUIRED"
     );
   }
 
@@ -174,6 +242,8 @@ export async function createDataRecord(
         factorSourceVersion: selection.ghgActivity.sourceVersion,
         notes: input.notes ?? null,
         metadata: input.metadata ?? Prisma.JsonNull,
+        dataOrigin: DataOrigin.INTERNAL,
+        vendorId: vendor?.id ?? null,
         createdByUserId: user.id
       },
       include: {
@@ -192,6 +262,13 @@ export async function createDataRecord(
             id: true,
             email: true,
             name: true
+          }
+        },
+        vendor: {
+          select: {
+            id: true,
+            displayName: true,
+            vendorCode: true
           }
         }
       }
@@ -217,7 +294,9 @@ export async function createDataRecord(
           scope: selection.ghgActivity.scope,
           factorSourceSheet: selection.ghgActivity.sourceSheet,
           factorSourceYear: selection.ghgActivity.sourceYear,
-          factorSourceVersion: selection.ghgActivity.sourceVersion
+          factorSourceVersion: selection.ghgActivity.sourceVersion,
+          dataOrigin: DataOrigin.INTERNAL,
+          vendorId: vendor?.id ?? null
         }
       }
     });
@@ -277,6 +356,13 @@ export async function listDataRecords(
             email: true,
             name: true
           }
+        },
+        vendor: {
+          select: {
+            id: true,
+            displayName: true,
+            vendorCode: true
+          }
         }
       }
     }),
@@ -314,6 +400,14 @@ export async function softDeleteDataRecord(
     throw new AppError("Data record not found", 404, "DATA_RECORD_NOT_FOUND");
   }
 
+  if (dataRecord.dataOrigin === DataOrigin.VENDOR) {
+    throw new AppError(
+      "Approved vendor records cannot be deleted",
+      409,
+      "VENDOR_DATA_RECORD_IMMUTABLE"
+    );
+  }
+
   if (companyAccess.role === COMPANY_ROLES.USER && dataRecord.createdByUserId !== user.id) {
     throw new AppError("Users can delete only their own records", 403, "DATA_RECORD_DELETE_DENIED");
   }
@@ -344,6 +438,13 @@ export async function softDeleteDataRecord(
             id: true,
             email: true,
             name: true
+          }
+        },
+        vendor: {
+          select: {
+            id: true,
+            displayName: true,
+            vendorCode: true
           }
         }
       }

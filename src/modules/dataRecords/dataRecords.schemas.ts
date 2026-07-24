@@ -29,6 +29,7 @@ export const createDataRecordSchema = z.object({
   ghgActivitySelectionId: z.string().uuid(),
   recordDate: dateOnlySchema,
   quantity: z.number().positive("Quantity must be greater than zero").finite(),
+  vendorId: z.string().uuid().optional(),
   notes: z.string().trim().max(2000).optional(),
   metadata: metadataSchema.optional()
 });

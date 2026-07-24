@@ -116,7 +116,7 @@ function toClientUrl(path: string): string {
 }
 
 function getSessionRedirectPath(session: Awaited<ReturnType<typeof loginWithGoogle>>, returnTo: string | null): string {
-  if (returnTo?.startsWith("/invite")) {
+  if (returnTo?.startsWith("/invite") || returnTo?.startsWith("/vendor/invite")) {
     return returnTo;
   }
 
@@ -128,6 +128,10 @@ function getSessionRedirectPath(session: Awaited<ReturnType<typeof loginWithGoog
 
   if (firstCompany) {
     return `/app/${firstCompany.companyId}`;
+  }
+
+  if (session.context.vendorMemberships[0]) {
+    return "/vendor";
   }
 
   return "/login?authError=no_workspace";

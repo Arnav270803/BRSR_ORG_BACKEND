@@ -14,6 +14,13 @@ import {
 import { reportingYearsRouter } from "./modules/reportingYears/reportingYears.routes.js";
 import { reportsPdfRouter, reportsRouter } from "./modules/reports/reports.routes.js";
 import { sitesRouter } from "./modules/sites/sites.routes.js";
+import {
+  companyVendorAnalyticsRouter,
+  companyVendorRequestsRouter,
+  companyVendorsRouter,
+  vendorInvitationsRouter,
+  vendorPortalRouter
+} from "./modules/vendors/vendors.routes.js";
 
 export const apiRouter = Router();
 
@@ -61,7 +68,15 @@ apiRouter.use(
 );
 apiRouter.use("/companies/:companyId/reporting-years", reportingYearsRouter);
 apiRouter.use("/companies/:companyId/sites", sitesRouter);
+apiRouter.use("/companies/:companyId/vendors", companyVendorsRouter);
+apiRouter.use(
+  "/companies/:companyId/vendor-data-requests",
+  companyVendorRequestsRouter
+);
+apiRouter.use("/companies/:companyId/vendor-analytics", companyVendorAnalyticsRouter);
 apiRouter.use("/companies", companiesRouter);
 apiRouter.use("/ghg", ghgFactorsRouter);
 apiRouter.use("/health", healthRouter);
 apiRouter.use("/invitations", invitationsRouter);
+apiRouter.use("/vendor-invitations", vendorInvitationsRouter);
+apiRouter.use("/vendor-portal/vendors/:vendorId", vendorPortalRouter);

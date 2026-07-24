@@ -416,6 +416,18 @@ export async function createReportPdf(report: ReportData) {
 
   drawTable(
     doc,
+    "Approved vendor emissions",
+    [
+      { key: "name", label: "Vendor", width: 270 },
+      { key: "recordCount", label: "Records", width: 80, align: "right" },
+      { key: "totalKgCo2e", label: "kg CO2e", width: 160, align: "right" }
+    ],
+    report.emissionSummary.totalsByVendor,
+    "No approved vendor submissions are included in this report."
+  );
+
+  drawTable(
+    doc,
     "Selected GHG activities",
     [
       { key: "activity", label: "Activity", width: 185 },
@@ -432,13 +444,14 @@ export async function createReportPdf(report: ReportData) {
     doc,
     "Submitted data records",
     [
-      { key: "recordDate", label: "Date", width: 66 },
-      { key: "activity", label: "Activity", width: 142 },
-      { key: "category", label: "Category", width: 88 },
-      { key: "scope", label: "Scope", width: 56 },
-      { key: "quantity", label: "Qty", width: 50, align: "right" },
-      { key: "unit", label: "Unit", width: 42 },
-      { key: "calculatedKgCo2e", label: "kg CO2e", width: 66, align: "right" }
+      { key: "recordDate", label: "Date", width: 56 },
+      { key: "activity", label: "Activity", width: 116 },
+      { key: "scope", label: "Scope", width: 44 },
+      { key: "dataOrigin", label: "Origin", width: 50 },
+      { key: "vendor", label: "Vendor", width: 110 },
+      { key: "quantity", label: "Qty", width: 45, align: "right" },
+      { key: "unit", label: "Unit", width: 40 },
+      { key: "calculatedKgCo2e", label: "kg CO2e", width: 50, align: "right" }
     ],
     report.dataRecords.slice(0, 100),
     "No data records have been submitted for this reporting year."

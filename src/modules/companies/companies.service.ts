@@ -2,12 +2,16 @@ import {
   CompanySiteStatus,
   CompanySiteType,
   MembershipRole,
-  MembershipStatus
+  MembershipStatus,
+  VendorTrackingMode
 } from "@prisma/client";
 
 import { prisma } from "../../infra/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
-import type { CreateCompanyInput } from "./companies.schemas.js";
+import type {
+  CreateCompanyInput,
+  UpdateCompanySettingsInput
+} from "./companies.schemas.js";
 
 type CompanySummary = {
   id: string;
@@ -19,6 +23,7 @@ type CompanySummary = {
   state: string;
   city: string;
   financialYearStartMonth: number;
+  vendorTrackingEnabled: boolean;
   status: string;
 };
 
@@ -32,6 +37,7 @@ function toCompanySummary(company: {
   state: string;
   city: string;
   financialYearStartMonth: number;
+  vendorTrackingEnabled: boolean;
   status: string;
 }): CompanySummary {
   return {
@@ -44,6 +50,7 @@ function toCompanySummary(company: {
     state: company.state,
     city: company.city,
     financialYearStartMonth: company.financialYearStartMonth,
+    vendorTrackingEnabled: company.vendorTrackingEnabled,
     status: company.status
   };
 }
@@ -77,7 +84,8 @@ export async function createCompanyForUser(input: CreateCompanyInput, userId: st
         listedStatus: input.listedStatus ?? null,
         employeeCountRange: input.employeeCountRange ?? null,
         contactPhone: input.contactPhone ?? null,
-        logoUrl: input.logoUrl ?? null
+        logoUrl: input.logoUrl ?? null,
+        vendorTrackingEnabled: input.vendorTrackingEnabled
       }
     });
 
@@ -145,6 +153,68 @@ export async function createCompanyForUser(input: CreateCompanyInput, userId: st
       status: result.membership.status
     }
   };
+}
+
+export async function updateCompanySettings(
+  companyId: string,
+  input: UpdateCompanySettingsInput,
+  actorUserId: string
+) {
+  const existingCompany = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: {
+      id: true,
+      vendorTrackingEnabled: true
+    }
+  });
+
+  if (!existingCompany) {
+    throw new AppError("Company not found", 404, "COMPANY_NOT_FOUND");
+  }
+
+  const company = await prisma.$transaction(async (tx) => {
+    const updatedCompany = await tx.company.update({
+      where: { id: companyId },
+      data: {
+        vendorTrackingEnabled: input.vendorTrackingEnabled
+      }
+    });
+
+    const resetSelections = input.vendorTrackingEnabled
+      ? { count: 0 }
+      : await tx.companyGhgActivitySelection.updateMany({
+          where: {
+            companyId,
+            vendorTrackingMode: {
+              not: VendorTrackingMode.NONE
+            }
+          },
+          data: {
+            vendorTrackingMode: VendorTrackingMode.NONE
+          }
+        });
+
+    await tx.auditLog.create({
+      data: {
+        companyId,
+        actorUserId,
+        action: "VENDOR_TRACKING_SETTING_UPDATED",
+        entityType: "company",
+        entityId: companyId,
+        beforeJson: {
+          vendorTrackingEnabled: existingCompany.vendorTrackingEnabled
+        },
+        afterJson: {
+          vendorTrackingEnabled: updatedCompany.vendorTrackingEnabled,
+          resetVendorTrackingSelections: resetSelections.count
+        }
+      }
+    });
+
+    return updatedCompany;
+  });
+
+  return toCompanySummary(company);
 }
 
 export async function getCurrentCompanyForUser(userId: string) {
